@@ -24,11 +24,13 @@ export function AgentPipeline({
   // Follow the active agent automatically while the run is live, but stop
   // hijacking the view once the user opens something themselves.
   const [userPinned, setUserPinned] = useState(false);
-  const runningAgent = run.agents.find((a) => a.status === 'running');
+  const runningAgentId = run.agents.find((a) => a.status === 'running')?.id ?? null;
 
   useEffect(() => {
-    if (!userPinned && runningAgent) setOpenId(runningAgent.id);
-  }, [runningAgent?.id, userPinned, runningAgent]);
+    // Keyed on the id only: including the agent object would re-run this on
+    // every poll, since each response deserialises to fresh objects.
+    if (!userPinned && runningAgentId !== null) setOpenId(runningAgentId);
+  }, [runningAgentId, userPinned]);
 
   return (
     <ol className="relative space-y-2">

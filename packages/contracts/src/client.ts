@@ -50,9 +50,13 @@ export class ApiClientError extends Error {
 }
 
 export interface ApiClientOptions {
+  /** Absolute (`https://api.example.com`) or relative (`''` for same-origin). */
   baseUrl: string;
   fetch?: typeof globalThis.fetch;
 }
+
+/** Never contacted: only used so `new URL()` can parse a relative path. */
+const PLACEHOLDER_ORIGIN = 'http://request.local';
 
 export function createApiClient(options: ApiClientOptions) {
   const doFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
@@ -64,14 +68,20 @@ export function createApiClient(options: ApiClientOptions) {
     schema: ZodType<T>,
     init: { body?: unknown; query?: Record<string, string | number | undefined>; signal?: AbortSignal } = {},
   ): Promise<T> {
-    const url = new URL(`${baseUrl}${path}`, globalThis.location?.origin ?? 'http://localhost');
+    // This package is isomorphic: it is typechecked with Node types on the
+    // server and runs in the browser. `globalThis.location` exists in neither
+    // type world reliably, so the URL is built against a placeholder origin and
+    // reduced back to a relative path when the caller gave a relative baseUrl.
+    const absolute = /^https?:\/\//i.test(baseUrl);
+    const url = new URL(`${baseUrl}${path}`, absolute ? undefined : PLACEHOLDER_ORIGIN);
     for (const [key, value] of Object.entries(init.query ?? {})) {
       if (value !== undefined && value !== '') url.searchParams.set(key, String(value));
     }
+    const target = absolute ? url.toString() : `${url.pathname}${url.search}`;
 
     let response: Response;
     try {
-      response = await doFetch(url.toString(), {
+      response = await doFetch(target, {
         method,
         headers: init.body === undefined ? {} : { 'content-type': 'application/json' },
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),

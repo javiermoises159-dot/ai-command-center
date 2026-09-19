@@ -97,10 +97,27 @@ export interface AgentExecutionRepository {
 }
 
 /** The three repositories, grouped so the composition root passes one object. */
-export interface Repositories {
+export interface RepositorySet {
   missions: MissionRepository;
   runs: RunRepository;
   agents: AgentExecutionRepository;
+}
+
+export interface Repositories extends RepositorySet {
+  /**
+   * Run `fn` against a transactional view of the repositories. Throwing rolls
+   * everything back.
+   *
+   * This exists because starting a run is three writes — the run row, the eight
+   * agent rows, the mission status — and a failure between them would leave a
+   * run with no agents, which the orchestrator would then "complete" having
+   * done nothing.
+   *
+   * The in-memory adapter satisfies this interface without real atomicity; see
+   * the note on its implementation.
+   */
+  transaction<T>(fn: (repos: RepositorySet) => Promise<T>): Promise<T>;
+
   /** Release pools/connections. Safe to call more than once. */
   close(): Promise<void>;
 }

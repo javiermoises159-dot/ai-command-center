@@ -137,32 +137,42 @@ export class MissionService {
     model: string,
   ): Promise<MissionRun> {
     const now = this.clock.now();
-    const attempt = (await this.repos.runs.latestAttempt(missionId)) + 1;
 
-    const run = await this.repos.runs.create({
-      id: newId(),
-      missionId,
-      attempt,
-      providerId,
-      model,
-      createdAt: now,
+    // One transaction: the run, its eight agent rows and the mission status
+    // land together or not at all. A run persisted without agents would be
+    // picked up by the orchestrator and "completed" having done no work.
+    const run = await this.repos.transaction(async (repos) => {
+      const attempt = (await repos.runs.latestAttempt(missionId)) + 1;
+
+      const created = await repos.runs.create({
+        id: newId(),
+        missionId,
+        attempt,
+        providerId,
+        model,
+        createdAt: now,
+      });
+
+      const rows: CreateAgentExecutionData[] = pipelineOrder().map((definition, index) => ({
+        id: newId(),
+        missionId,
+        runId: created.id,
+        agentId: definition.id,
+        name: definition.name,
+        orderIndex: index,
+        task: buildAssignment(definition, missionPrompt),
+      }));
+
+      await repos.agents.createMany(rows);
+      await repos.missions.updateStatus(missionId, 'pending', now);
+      return created;
     });
 
-    const rows: CreateAgentExecutionData[] = pipelineOrder().map((definition, index) => ({
-      id: newId(),
-      missionId,
-      runId: run.id,
-      agentId: definition.id,
-      name: definition.name,
-      orderIndex: index,
-      task: buildAssignment(definition, missionPrompt),
-    }));
-
-    await this.repos.agents.createMany(rows);
-    await this.repos.missions.updateStatus(missionId, 'pending', now);
+    // Enqueued only after the transaction commits, so a worker can never pick
+    // up a run that was rolled back.
     await this.queue.enqueue({ type: 'execute-run', runId: run.id, missionId });
 
-    this.logger.info('run queued', { missionId, runId: run.id, attempt });
+    this.logger.info('run queued', { missionId, runId: run.id, attempt: run.attempt });
     return run;
   }
 

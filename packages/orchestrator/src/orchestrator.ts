@@ -100,9 +100,16 @@ export class MissionOrchestrator {
       const at = this.clock.now();
       const message = errorMessage(error);
       log.error('run aborted by infrastructure error', { error: message });
-      await this.repos.agents.markRemainingSkipped(run.id, at);
-      await this.repos.runs.markFinished(run.id, 'failed', at, { error: message });
-      await this.repos.missions.updateStatus(run.missionId, 'failed', at);
+
+      // The failure may have happened after `drive` already closed the run.
+      // Re-reading avoids an illegal completed -> failed transition here, which
+      // would replace the real error with a confusing one.
+      const current = await this.repos.runs.findById(run.id).catch(() => null);
+      if (current === null || current.status === 'pending' || current.status === 'running') {
+        await this.repos.agents.markRemainingSkipped(run.id, at).catch(() => 0);
+        await this.repos.runs.markFinished(run.id, 'failed', at, { error: message }).catch(() => undefined);
+        await this.repos.missions.updateStatus(run.missionId, 'failed', at).catch(() => undefined);
+      }
       throw toDomainError(error);
     }
   }
@@ -114,6 +121,14 @@ export class MissionOrchestrator {
     await this.repos.missions.updateStatus(run.missionId, 'running', this.clock.now());
 
     const agents = await this.repos.agents.listByRun(run.id);
+
+    // A run with no agents cannot produce anything. Without this guard it would
+    // fall through the loop and be reported `completed` having done no work,
+    // which is the worst possible failure mode: silent and plausible-looking.
+    if (agents.length === 0) {
+      throw new Error(`Run ${run.id} has no agent executions; it cannot be executed.`);
+    }
+
     const upstream: UpstreamResult[] = [];
     const failed: FailedAgent[] = [];
 

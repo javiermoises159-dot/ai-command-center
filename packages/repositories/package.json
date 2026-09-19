@@ -12,9 +12,7 @@
   },
   "dependencies": {
     "@acc/database": "workspace:*",
-    "@acc/domain": "workspace:*"
-  },
-  "peerDependencies": {
+    "@acc/domain": "workspace:*",
     "drizzle-orm": "^0.44.0"
   }
 }

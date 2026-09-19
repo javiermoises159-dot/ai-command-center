@@ -45,16 +45,24 @@ function usePolledResource<T>(
   intervalMs = IDLE_POLL_MS,
 ) {
   const [state, setState] = useState<AsyncState<T>>({ data: null, error: null, loading: true });
+
   const fetcherRef = useRef(fetcher);
   const shouldPollRef = useRef(shouldPoll);
   fetcherRef.current = fetcher;
   shouldPollRef.current = shouldPoll;
 
-  const load = useCallback(async (signal: AbortSignal, silent: boolean) => {
+  // The latest data, mirrored outside React state. The scheduling decision is
+  // read from here rather than from inside a setState updater: React may invoke
+  // an updater more than once (StrictMode does, in development), and scheduling
+  // a timer from one would leave an orphaned timer polling forever.
+  const dataRef = useRef<T | null>(null);
+
+  const load = useCallback(async (signal: AbortSignal, silent: boolean): Promise<void> => {
     if (!silent) setState((prev) => ({ ...prev, loading: true }));
     try {
       const data = await fetcherRef.current(signal);
       if (signal.aborted) return;
+      dataRef.current = data;
       setState({ data, error: null, loading: false });
     } catch (error) {
       if (signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return;
@@ -69,16 +77,12 @@ function usePolledResource<T>(
     let timer: ReturnType<typeof setTimeout> | undefined;
     let cancelled = false;
 
-    const tick = async (silent: boolean) => {
+    const tick = async (silent: boolean): Promise<void> => {
       await load(controller.signal, silent);
       if (cancelled || controller.signal.aborted) return;
-
-      setState((current) => {
-        if (shouldPollRef.current(current.data)) {
-          timer = setTimeout(() => void tick(true), intervalMs);
-        }
-        return current;
-      });
+      if (shouldPollRef.current(dataRef.current)) {
+        timer = setTimeout(() => void tick(true), intervalMs);
+      }
     };
 
     void tick(false);
@@ -88,12 +92,14 @@ function usePolledResource<T>(
       controller.abort();
       if (timer !== undefined) clearTimeout(timer);
     };
+    // `deps` is spread by the caller; each hook below passes a stable list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, intervalMs, load]);
 
+  // Manual refresh (retry button, or after a mutation). Its own controller, so
+  // it never cancels the polling loop.
   const refresh = useCallback(() => {
-    const controller = new AbortController();
-    void load(controller.signal, true);
+    void load(new AbortController().signal, true);
   }, [load]);
 
   return { ...state, refresh };

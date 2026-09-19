@@ -8,3 +8,4 @@ build/
 coverage/
 .pnpm-store/
 apps/web/dev-dist/
+packages/database/drizzle-generated/

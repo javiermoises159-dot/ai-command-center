@@ -9,6 +9,10 @@
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    // Required for the CommonJS packages this project depends on: `pg` and
+    // `express` are both default-imported and have no ESM default export.
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,

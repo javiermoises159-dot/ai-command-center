@@ -331,10 +331,23 @@ class MemoryAgentExecutionRepository implements AgentExecutionRepository {
 
 export function createMemoryRepositories(): Repositories {
   const store = createStore();
-  return {
+  const set = {
     missions: new MemoryMissionRepository(store),
     runs: new MemoryRunRepository(store),
     agents: new MemoryAgentExecutionRepository(store),
+  };
+
+  return {
+    ...set,
+    /**
+     * NOT atomic, and deliberately not faked to look atomic: implementing
+     * rollback would mean snapshotting three Maps on every call to buy
+     * durability guarantees this adapter does not otherwise offer. Node runs
+     * this single-threaded with no I/O between the writes, so the failure
+     * window the transaction exists to close does not arise here. Postgres is
+     * where the guarantee is real.
+     */
+    transaction: (fn) => fn(set),
     close: () => {
       store.missions.clear();
       store.runs.clear();

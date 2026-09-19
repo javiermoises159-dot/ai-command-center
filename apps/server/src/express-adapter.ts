@@ -82,6 +82,22 @@ export function createExpressApp(container: Container): Express {
     });
   });
 
+  // Catch-all. Express 5's default handler renders HTML, which would break a
+  // client that has only ever been given JSON. Registered last so it sees
+  // anything the handlers above let through.
+  app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+    container.logger.error('unhandled request error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      error: { code: 'internal_error', message: 'An unexpected error occurred.', issues: [] },
+    });
+  });
+
   return app;
 }
 

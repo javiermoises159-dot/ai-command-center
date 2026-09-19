@@ -10,7 +10,7 @@
     "./schema": "./src/schema.ts"
   },
   "scripts": {
-    "generate": "drizzle-kit generate",
+    "diff": "drizzle-kit generate",
     "migrate": "tsx src/migrate.ts",
     "studio": "drizzle-kit studio"
   },

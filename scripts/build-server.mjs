@@ -4,18 +4,27 @@
  * Workspace packages are consumed as TypeScript source, so a plain `tsc` emit
  * would leave `@acc/*` path aliases unresolved at runtime. esbuild reads the
  * tsconfig paths and inlines them, which turns the whole backend into one
- * `dist/server/main.js` that `node` runs with no loader and no path mapping.
+ * `apps/server/dist/main.js` that `node` runs with no loader and no path mapping.
  *
- * `pg` stays external because it loads native bindings.
+ * Two things deliberately do NOT get bundled:
+ *
+ *  - `pg`, because it loads native bindings. The output therefore lives inside
+ *    apps/server so Node's resolution finds apps/server/node_modules/pg — which
+ *    is why `pg` is a declared dependency of the server app even though the
+ *    import lives in @acc/database.
+ *  - the SQL migrations, which are read from disk at boot. They are copied next
+ *    to the bundle so `migrate()`'s default lookup (a `migrations` folder beside
+ *    the running module) resolves in both dev and production.
  */
 
 import { build } from 'esbuild';
-import { rm, mkdir } from 'node:fs/promises';
+import { cp, mkdir, readdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const outdir = join(root, 'dist', 'server');
+const outdir = join(root, 'apps', 'server', 'dist');
+const migrationsSrc = join(root, 'packages', 'database', 'src', 'migrations');
 
 await rm(outdir, { recursive: true, force: true });
 await mkdir(outdir, { recursive: true });
@@ -29,8 +38,6 @@ const result = await build({
   format: 'esm',
   sourcemap: true,
   minify: false,
-  // Native bindings cannot be bundled; everything else is inlined so the
-  // output runs from a directory containing only node_modules/pg.
   external: ['pg', 'pg-native'],
   tsconfig: join(root, 'tsconfig.json'),
   logLevel: 'info',
@@ -45,4 +52,7 @@ if (result.errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`Server bundled to ${join('dist', 'server', 'main.js')}`);
+await cp(migrationsSrc, join(outdir, 'migrations'), { recursive: true });
+const copied = (await readdir(join(outdir, 'migrations'))).filter((f) => f.endsWith('.sql'));
+
+console.log(`Server bundled to apps/server/dist/main.js (+${copied.length} migration file(s))`);

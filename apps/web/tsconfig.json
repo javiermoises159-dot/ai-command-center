@@ -3,10 +3,12 @@
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "types": ["vite/client"],
+    // vite/client supplies `import.meta.env` and the `*.css` module declaration;
+    // node is needed by vite.config.ts, which this project also typechecks.
+    "types": ["vite/client", "node"],
     "paths": {
       "@acc/contracts": ["../../packages/contracts/src/index.ts"],
-      "@acc/domain": ["../../packages/domain/src/index.ts"],
+      "@acc/contracts/*": ["../../packages/contracts/src/*"],
       "@/*": ["./src/*"]
     }
   },

@@ -1,12 +1,9 @@
 {
+  "//": "Server and packages. The web app is a separate project (apps/web/tsconfig.json) because it needs DOM + vite/client types that the backend must not silently depend on. `pnpm typecheck` runs both.",
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "jsx": "react-jsx",
-    // vite/client supplies the `import.meta.env` and `*.css` module
-    // declarations the web app relies on; harmless for the server packages.
-    "types": ["node", "vite/client"]
+    "types": ["node"]
   },
-  "include": ["packages/*/src/**/*.ts", "apps/server/src/**/*.ts", "apps/web/src/**/*.ts", "apps/web/src/**/*.tsx", "scripts/**/*.mjs"],
+  "include": ["packages/*/src/**/*.ts", "apps/server/src/**/*.ts"],
   "exclude": ["node_modules", "**/dist/**"]
 }

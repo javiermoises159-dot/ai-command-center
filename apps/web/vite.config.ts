@@ -11,9 +11,10 @@ export default defineConfig({
     alias: {
       // Workspace packages are consumed as TypeScript source; Vite compiles
       // them as part of the app. Keeps the dev loop instant with no build step
-      // between packages.
+      // between packages. Only @acc/contracts is aliased because it is the only
+      // workspace package the browser bundle is allowed to pull in — the domain,
+      // orchestrator and repositories are server-side.
       '@acc/contracts': resolve('../../packages/contracts/src/index.ts'),
-      '@acc/domain': resolve('../../packages/domain/src/index.ts'),
       '@': resolve('./src'),
     },
   },

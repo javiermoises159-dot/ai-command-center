@@ -14,16 +14,26 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
-const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'migrations');
+/**
+ * Default location: a `migrations` folder beside the running module.
+ *
+ * Under tsx that is `packages/database/src/migrations`. In the bundled server
+ * it is `apps/server/dist/migrations`, which the build script populates — so
+ * boot-time auto-migration works in production without a special case here.
+ */
+const DEFAULT_MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'migrations');
 
 export interface MigrateOptions {
   connectionString: string;
   ssl?: boolean;
   log?: (message: string) => void;
+  /** Override the SQL directory. Defaults to `migrations` beside this module. */
+  migrationsDir?: string;
 }
 
 export async function migrate(options: MigrateOptions): Promise<string[]> {
   const log = options.log ?? ((message: string) => console.log(`[migrate] ${message}`));
+  const migrationsDir = options.migrationsDir ?? DEFAULT_MIGRATIONS_DIR;
   const client = new pg.Client({
     connectionString: options.connectionString,
     ...(options.ssl === true ? { ssl: { rejectUnauthorized: false } } : {}),
@@ -40,7 +50,7 @@ export async function migrate(options: MigrateOptions): Promise<string[]> {
       )
     `);
 
-    const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith('.sql')).sort();
+    const files = (await readdir(migrationsDir)).filter((f) => f.endsWith('.sql')).sort();
 
     const { rows } = await client.query<{ name: string }>('SELECT name FROM _acc_migrations');
     const done = new Set(rows.map((r) => r.name));
@@ -48,7 +58,7 @@ export async function migrate(options: MigrateOptions): Promise<string[]> {
     for (const file of files) {
       if (done.has(file)) continue;
 
-      const sql = await readFile(join(MIGRATIONS_DIR, file), 'utf8');
+      const sql = await readFile(join(migrationsDir, file), 'utf8');
       log(`applying ${file}`);
 
       await client.query('BEGIN');

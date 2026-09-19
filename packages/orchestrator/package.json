@@ -12,5 +12,8 @@
   "dependencies": {
     "@acc/domain": "workspace:*",
     "@acc/providers": "workspace:*"
+  },
+  "devDependencies": {
+    "@acc/repositories": "workspace:*"
   }
 }

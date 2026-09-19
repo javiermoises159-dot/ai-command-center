@@ -26,6 +26,7 @@ import {
   type MissionStatus,
   type MissionSummary,
   type Repositories,
+  type RepositorySet,
   type RunDetail,
   type RunId,
   type RunRepository,
@@ -36,8 +37,16 @@ import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import { toAgent, toMission, toRun, usageColumns } from './mappers.ts';
 
+/**
+ * The root Drizzle instance or a transaction handle.
+ *
+ * Derived from `Database['transaction']` rather than named explicitly, so it
+ * tracks drizzle's own generics instead of drifting from them.
+ */
+type DbLike = Database | Parameters<Parameters<Database['transaction']>[0]>[0];
+
 class DrizzleMissionRepository implements MissionRepository {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: DbLike) {}
 
   async create(data: CreateMissionData): Promise<Mission> {
     const [row] = await this.db
@@ -179,12 +188,12 @@ class DrizzleMissionRepository implements MissionRepository {
     status: MissionStatus,
     at: Date,
   ): Promise<void> {
+    // A null result means "this run produced nothing", not "erase what is
+    // stored". Omitting the column leaves an earlier run's deliverable intact.
     await this.db
       .update(missions)
       .set({
-        // COALESCE: never wipe a stored deliverable because a later run failed
-        // before reaching the Integrator.
-        finalResult: finalResult === null ? sql`${missions.finalResult}` : finalResult,
+        ...(finalResult === null ? {} : { finalResult }),
         status,
         updatedAt: at,
       })
@@ -193,7 +202,7 @@ class DrizzleMissionRepository implements MissionRepository {
 }
 
 class DrizzleRunRepository implements RunRepository {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: DbLike) {}
 
   async create(data: CreateRunData): Promise<MissionRun> {
     const [row] = await this.db
@@ -283,7 +292,7 @@ class DrizzleRunRepository implements RunRepository {
 }
 
 class DrizzleAgentExecutionRepository implements AgentExecutionRepository {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: DbLike) {}
 
   async createMany(data: readonly CreateAgentExecutionData[]): Promise<AgentExecution[]> {
     if (data.length === 0) return [];
@@ -364,11 +373,19 @@ class DrizzleAgentExecutionRepository implements AgentExecutionRepository {
   }
 }
 
-export function createDrizzleRepositories(db: Database, close: () => Promise<void>): Repositories {
+function buildSet(db: DbLike): RepositorySet {
   return {
     missions: new DrizzleMissionRepository(db),
     runs: new DrizzleRunRepository(db),
     agents: new DrizzleAgentExecutionRepository(db),
+  };
+}
+
+export function createDrizzleRepositories(db: Database, close: () => Promise<void>): Repositories {
+  return {
+    ...buildSet(db),
+    // Real atomicity: a throw inside `fn` rolls back every write it made.
+    transaction: (fn) => db.transaction((tx) => fn(buildSet(tx))),
     close,
   };
 }

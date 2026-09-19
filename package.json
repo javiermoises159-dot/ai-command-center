@@ -5,10 +5,10 @@
   "type": "module",
   "packageManager": "pnpm@10.28.0",
   "engines": {
-    "node": ">=22.6.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
     "typecheck:core": "tsc --noEmit -p tsconfig.core.json",
     "test": "tsx --test \"packages/**/*.test.ts\" \"apps/server/**/*.test.ts\"",
     "test:watch": "tsx --test --watch \"packages/**/*.test.ts\" \"apps/server/**/*.test.ts\"",
@@ -18,8 +18,9 @@
     "dev": "node scripts/dev.mjs",
     "dev:server": "pnpm --filter @acc/server dev",
     "dev:web": "pnpm --filter @acc/web dev",
-    "db:generate": "pnpm --filter @acc/database generate",
+    "db:diff": "pnpm --filter @acc/database diff",
     "db:migrate": "pnpm --filter @acc/database migrate",
+    "openapi": "pnpm --filter @acc/contracts openapi",
     "verify": "pnpm run typecheck && pnpm run test && pnpm run build"
   },
   "devDependencies": {
@@ -27,5 +28,9 @@
     "esbuild": "^0.25.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.0"
+  },
+  "pnpm": {
+    "//": "pnpm 10 blocks postinstall scripts by default. These packages ship native binaries that are unusable without their install step: esbuild bundles the server, and Tailwind v4's oxide engine compiles the CSS. Without this list `pnpm install` succeeds but `pnpm build` fails with a confusing binary-not-found error.",
+    "onlyBuiltDependencies": ["esbuild", "@tailwindcss/oxide"]
   }
 }

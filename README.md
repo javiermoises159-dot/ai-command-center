@@ -42,7 +42,7 @@ explanation. They never silently fall back to the mock.
 
 ## Install
 
-Requires **Node ≥ 22.6**, **pnpm 10**, and **PostgreSQL ≥ 14**.
+Requires **Node ≥ 22.12** (Vite 7's floor), **pnpm 10**, and **PostgreSQL ≥ 14**.
 
 ```bash
 pnpm install
@@ -50,12 +50,32 @@ cp .env.example .env          # defaults work for a local Postgres
 createdb ai_command_center    # or point DATABASE_URL at an existing database
 ```
 
+pnpm 10 blocks postinstall scripts by default, so `package.json` declares
+`pnpm.onlyBuiltDependencies` for `esbuild` and `@tailwindcss/oxide` — both ship
+native binaries the build needs. Without that list `pnpm install` would succeed
+and `pnpm build` would fail with a binary-not-found error.
+
 Migrations run automatically on boot (`DB_AUTO_MIGRATE=true`). To run them by
 hand:
 
 ```bash
 pnpm db:migrate
 ```
+
+### Changing the schema
+
+`packages/database/src/migrations/*.sql` is hand-authored and is the single
+source of truth for what runs against the database. drizzle-kit is used for
+**diffing only**:
+
+```bash
+pnpm db:diff     # writes a proposed migration into packages/database/drizzle-generated/
+```
+
+Review it, then copy the statements into a new numbered file in
+`src/migrations/` and mirror the change in `schema.ts`. Letting drizzle-kit
+write directly into `src/migrations/` would put two numbering schemes and two
+journals in one folder.
 
 ### Running without a database
 
@@ -114,10 +134,16 @@ pnpm verify        # typecheck + tests + build
 Individually:
 
 ```bash
-pnpm typecheck     # tsc across every package and app
+pnpm typecheck     # two projects: server+packages (node types), then the web app (DOM + vite types)
 pnpm test          # node:test via tsx — no test framework dependency
-pnpm build         # esbuild bundle of the server + vite build of the web app
+pnpm build         # esbuild bundle → apps/server/dist/main.js, then vite build of the web app
 ```
+
+The server bundle externalises `pg` (native bindings cannot be bundled), which
+is why it is emitted inside `apps/server/` — Node then resolves `pg` from
+`apps/server/node_modules`. The SQL migrations are copied next to the bundle so
+boot-time auto-migration works in production as well as in dev. Run it with
+`pnpm --filter @acc/server start`.
 
 `pnpm typecheck:core` typechecks only the dependency-free core (domain,
 providers, orchestrator, in-memory adapter, HTTP router). It is an
@@ -185,6 +211,13 @@ result and error. Each agent execution records `agentId`, `name`, `orderIndex`,
 `mission_agents` carries both `run_id` and `mission_id`, and a composite foreign
 key on `(run_id, mission_id)` makes that denormalisation impossible to corrupt —
 an agent cannot point at a run belonging to a different mission.
+
+Starting a run is three writes — the run row, the eight agent rows, the mission
+status — and they happen in **one transaction**, through `Repositories.transaction`.
+A run persisted without its agents would otherwise be picked up by the
+orchestrator and reported `completed` having done nothing. The job is enqueued
+only after the transaction commits, so a worker can never see a rolled-back run,
+and the orchestrator refuses outright to execute a run with zero agents.
 
 ### States
 

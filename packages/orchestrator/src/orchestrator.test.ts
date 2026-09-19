@@ -347,6 +347,83 @@ describe('listing and stats', () => {
   });
 });
 
+describe('run persistence is atomic', () => {
+  it('does not enqueue a run when persisting its agents fails', async () => {
+    const repos = createMemoryRepositories();
+    const providers = new ProviderRegistry().register(new MockProvider({ sleep: () => Promise.resolve() }), {
+      makeDefault: true,
+    });
+    const queue = new InProcessJobQueue({ logger: silentLogger });
+    queue.process(() => Promise.resolve());
+    queue.start();
+
+    // Simulate the database rejecting the agent insert mid-transaction.
+    const broken: Repositories = {
+      ...repos,
+      transaction: (fn) =>
+        repos.transaction((set) =>
+          fn({
+            ...set,
+            agents: {
+              ...set.agents,
+              createMany: () => Promise.reject(new Error('connection lost')),
+            },
+          }),
+        ),
+    };
+
+    const service = new MissionService({
+      repositories: broken,
+      providers,
+      queue,
+      logger: silentLogger,
+      clock: fakeClock(),
+    });
+
+    await assert.rejects(service.create({ prompt: 'Launch an online cookie store in Italy' }), /connection lost/);
+
+    // The critical assertion: no job was handed to the queue, so no worker can
+    // pick up a run whose agents were never written.
+    assert.equal(queue.size(), 0);
+  });
+
+  it('fails a run with no agent executions instead of reporting it completed', async () => {
+    const repos = createMemoryRepositories();
+    const providers = new ProviderRegistry().register(new MockProvider({ sleep: () => Promise.resolve() }), {
+      makeDefault: true,
+    });
+    const clock = fakeClock();
+
+    const mission = await repos.missions.create({
+      id: 'm1',
+      prompt: 'Launch an online cookie store in Italy',
+      title: 'Launch an online cookie store in Italy',
+      createdAt: clock.now(),
+    });
+    const run = await repos.runs.create({
+      id: 'r1',
+      missionId: mission.id,
+      attempt: 1,
+      providerId: 'mock',
+      model: 'mock-1',
+      createdAt: clock.now(),
+    });
+
+    const orchestrator = new MissionOrchestrator({
+      repositories: repos,
+      providers,
+      logger: silentLogger,
+      clock,
+    });
+
+    await assert.rejects(orchestrator.execute(run.id), /no agent executions/);
+
+    const after = await repos.runs.findById(run.id);
+    assert.equal(after?.status, 'failed', 'an empty run must not be reported as completed');
+    assert.equal((await repos.missions.findById(mission.id))?.status, 'failed');
+  });
+});
+
 describe('crash recovery', () => {
   it('closes runs left in flight by a restart instead of leaving them running forever', async () => {
     const repos = createMemoryRepositories();
