@@ -457,6 +457,48 @@ describe('crash recovery', () => {
     assert.equal(detail.runs[0]?.agents.filter((a) => a.status === 'pending').length, 0);
   });
 
+  it('fails the agent that was mid-execution instead of leaving it running inside a failed run', async () => {
+    const repos = createMemoryRepositories();
+    const providers = new ProviderRegistry().register(new MockProvider({ sleep: () => Promise.resolve() }), {
+      makeDefault: true,
+    });
+    const deadQueue = new InProcessJobQueue({ logger: silentLogger });
+    deadQueue.process(() => Promise.resolve());
+
+    const service = new MissionService({
+      repositories: repos,
+      providers,
+      queue: deadQueue,
+      logger: silentLogger,
+      clock: fakeClock(),
+    });
+
+    const created = await service.create({ prompt: 'Launch an online cookie store in Italy' });
+    const missionId = created.mission.mission.id;
+    const runId = created.run?.id;
+    assert.ok(runId, 'a run is scheduled on creation');
+
+    // The process died while the first agents were done and one was executing.
+    const agents = await repos.agents.listByRun(runId);
+    const usage = { provider: 'mock', model: 'mock-1', requestId: 'req-1', promptTokens: 1, completionTokens: 1, totalTokens: 2, latencyMs: 1 };
+    const at = new Date('2026-01-01T00:00:00Z');
+    await repos.runs.markStarted(runId, at);
+    await repos.agents.markStarted(agents[0]!.id, at);
+    await repos.agents.markCompleted(agents[0]!.id, 'done', usage, at);
+    await repos.agents.markStarted(agents[1]!.id, at);
+
+    await recoverUnfinishedRuns({ repositories: repos, logger: silentLogger });
+
+    const detail = await service.get(missionId);
+    const settled = detail.runs[0]?.agents ?? [];
+    assert.equal(detail.runs[0]?.run.status, 'failed');
+    assert.equal(settled.filter((a) => a.status === 'running').length, 0, 'no agent may stay running in a failed run');
+    assert.equal(settled[0]?.status, 'completed', 'finished work is preserved');
+    assert.equal(settled[1]?.status, 'failed', 'the interrupted agent is failed');
+    assert.match(settled[1]?.error ?? '', /restarted/i);
+    assert.equal(settled.slice(2).every((a) => a.status === 'skipped'), true, 'agents that never started are skipped');
+  });
+
   it('does nothing when every run is finished', async () => {
     const h = harness();
     await h.runToCompletion('Launch an online cookie store in Italy');

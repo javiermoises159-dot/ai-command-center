@@ -25,6 +25,14 @@ export async function recoverUnfinishedRuns(deps: {
 
   const at = clock.now();
   for (const run of orphans) {
+    // The agent that was executing when the process died will never report
+    // back. Leaving it `running` inside a `failed` run would show a spinner
+    // that never stops, so it is failed explicitly. Agents that never started
+    // are skipped; agents that already finished keep their results.
+    const interrupted = (await deps.repositories.agents.listByRun(run.id)).filter((a) => a.status === 'running');
+    for (const agent of interrupted) {
+      await deps.repositories.agents.markFailed(agent.id, 'The server restarted while this agent was running.', at);
+    }
     await deps.repositories.agents.markRemainingSkipped(run.id, at);
     await deps.repositories.runs.markFinished(run.id, 'failed', at, {
       error: 'The server restarted while this run was in progress.',
