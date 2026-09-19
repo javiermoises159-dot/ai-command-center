@@ -17,5 +17,8 @@
     "express": "^5.1.0",
     "pg": "^8.16.0"
   },
-  "//": "`pg` is declared here even though the import lives in @acc/database: the production bundle externalises it (native bindings cannot be bundled), so it must resolve from apps/server/node_modules at runtime."
+  "//": "`pg` is declared here even though the import lives in @acc/database: the production bundle externalises it (native bindings cannot be bundled), so it must resolve from apps/server/node_modules at runtime.",
+  "devDependencies": {
+    "@types/express": "^5.0.6"
+  }
 }
