@@ -15,6 +15,8 @@ import type {
   MissionDetail,
   MissionStatus,
   MissionSummary,
+  HealthResponse,
+  ListProvidersResponse,
   Provider,
   StatsResponse,
 } from '../lib/api.ts';
@@ -57,6 +59,11 @@ function usePolledResource<T>(
   // a timer from one would leave an orphaned timer polling forever.
   const dataRef = useRef<T | null>(null);
 
+  // Set by the polling effect: refetch now and (re)start the loop. Polling stops
+  // once nothing is active, so a mutation such as "Run again" must be able to
+  // wake it up again; a bare refetch would show the new run once and go quiet.
+  const restartRef = useRef<() => void>(() => undefined);
+
   const load = useCallback(async (signal: AbortSignal, silent: boolean): Promise<void> => {
     if (!silent) setState((prev) => ({ ...prev, loading: true }));
     try {
@@ -87,7 +94,13 @@ function usePolledResource<T>(
 
     void tick(false);
 
+    restartRef.current = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      void tick(true);
+    };
+
     return () => {
+      restartRef.current = () => undefined;
       cancelled = true;
       controller.abort();
       if (timer !== undefined) clearTimeout(timer);
@@ -96,11 +109,11 @@ function usePolledResource<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, intervalMs, load]);
 
-  // Manual refresh (retry button, or after a mutation). Its own controller, so
-  // it never cancels the polling loop.
+  // Manual refresh (retry button, or after a mutation). Reuses the loop's
+  // controller, so it is cancelled with the component like any other poll.
   const refresh = useCallback(() => {
-    void load(new AbortController().signal, true);
-  }, [load]);
+    restartRef.current();
+  }, []);
 
   return { ...state, refresh };
 }
@@ -164,4 +177,47 @@ export function useProviders() {
   }, []);
 
   return providers;
+}
+
+/** Providers plus which one is the default, with loading/error state for Settings. */
+export function useProviderInfo() {
+  const [state, setState] = useState<AsyncState<ListProvidersResponse>>({ data: null, error: null, loading: true });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .listProviders(controller.signal)
+      .then((data) => setState({ data, error: null, loading: false }))
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setState({ data: null, error: message(error), loading: false });
+      });
+    return () => controller.abort();
+  }, []);
+
+  return state;
+}
+
+export interface HealthSnapshot {
+  health: HealthResponse;
+  /** Round-trip time of the health request, measured in the browser. */
+  latencyMs: number;
+}
+
+/**
+ * Liveness of the API, polled slowly. This is what the sidebar's status light
+ * and the Settings "System status" panel read — it is a real request, so a
+ * stopped server turns the light red instead of showing a stale green.
+ */
+export function useHealth() {
+  return usePolledResource<HealthSnapshot>(
+    async (signal) => {
+      const startedAt = performance.now();
+      const health = await api.health(signal);
+      return { health, latencyMs: Math.round(performance.now() - startedAt) };
+    },
+    () => true,
+    [],
+    15_000,
+  );
 }

@@ -154,7 +154,10 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
 
     if (token.startsWith('`')) {
       nodes.push(
-        <code key={id} className="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[0.85em] text-cyan-200">
+        <code
+          key={id}
+          className="rounded bg-[var(--color-tint-strong)] px-1.5 py-0.5 font-mono text-[0.85em] text-cyan-800 dark:text-cyan-200"
+        >
           {token.slice(1, -1)}
         </code>,
       );
@@ -177,7 +180,7 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
             href={url}
             target="_blank"
             rel="noreferrer noopener"
-            className="text-cyan-300 underline decoration-cyan-300/40 underline-offset-2"
+            className="text-cyan-700 underline decoration-cyan-700/40 underline-offset-2 dark:text-cyan-300 dark:decoration-cyan-300/40"
           >
             {label}
           </a>
@@ -243,7 +246,7 @@ export function Markdown({ source, className }: { source: string; className?: st
             return (
               <blockquote
                 key={key}
-                className="border-l-2 border-[var(--color-signal)]/50 bg-white/[0.03] py-2 pl-3 pr-2 text-[0.85rem]"
+                className="border-l-2 border-[var(--color-signal)]/50 bg-[var(--color-tint)] py-2 pl-3 pr-2 text-[0.85rem]"
               >
                 {block.lines.map((line, j) => (
                   <p key={`${key}-${j}`}>{inline(line, `${key}-${j}`)}</p>
@@ -255,7 +258,7 @@ export function Markdown({ source, className }: { source: string; className?: st
             return (
               <pre
                 key={key}
-                className="overflow-x-auto rounded-lg border border-[var(--color-edge)] bg-black/40 p-3 font-mono text-[0.78rem] leading-relaxed text-cyan-100"
+                className="overflow-x-auto rounded-lg border border-[var(--color-edge)] bg-[var(--color-tint)] p-3 font-mono text-[0.78rem] leading-relaxed text-[var(--color-ink)]"
               >
                 <code>{block.lines.join('\n')}</code>
               </pre>

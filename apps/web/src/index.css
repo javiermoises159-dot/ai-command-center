@@ -4,10 +4,18 @@
  * Tailwind v4 CSS-first configuration. Design tokens live here rather than in a
  * tailwind.config.js, which v4 no longer needs.
  *
- * The palette is a dark operations console: near-black base, a cyan signal
- * colour for anything live, and one accent per agent so the pipeline reads at a
- * glance on a phone.
+ * Two themes share one set of token names. The dark theme is the default
+ * "operations console": near-black base, a cyan signal colour for anything live,
+ * and one accent per agent. The light theme redefines the same tokens, so
+ * components never branch on the theme except for the few tinted accent colours
+ * that use the `dark:` variant below.
  */
+
+/* `dark:` follows the data-theme attribute set on <html>, not the OS setting
+   directly — the OS preference is resolved into that attribute by lib/theme.tsx
+   (and by the inline script in index.html before first paint). */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
 @theme {
   --color-void: #05070d;
   --color-surface: #0b0f1a;
@@ -17,7 +25,7 @@
 
   --color-ink: #e8edf7;
   --color-ink-dim: #93a1bd;
-  --color-ink-faint: #5d6b87;
+  --color-ink-faint: #6a7896;
 
   --color-signal: #22d3ee;
   --color-signal-deep: #0891b2;
@@ -27,9 +35,44 @@
   --color-warn: #fbbf24;
   --color-bad: #fb7185;
 
+  /* Neutral tints used for chips, hovers and fields; theme-aware. */
+  --color-tint: rgb(255 255 255 / 0.05);
+  --color-tint-strong: rgb(255 255 255 / 0.1);
+  --color-line: rgb(255 255 255 / 0.1);
+  --color-field: rgb(0 0 0 / 0.25);
+  --color-on-signal: #04212b;
+
   --font-mono: 'SF Mono', 'JetBrains Mono', ui-monospace, 'Menlo', monospace;
 
   --radius-panel: 14px;
+}
+
+/* Light theme: same names, different values. Signal is deepened to keep text
+   contrast above 4.5:1 on white. */
+:root[data-theme='light'] {
+  --color-void: #f4f6fb;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef2f8;
+  --color-edge: #e1e7f0;
+  --color-edge-bright: #c8d2e2;
+
+  --color-ink: #0d1424;
+  --color-ink-dim: #46536e;
+  --color-ink-faint: #64718b;
+
+  --color-signal: #0e7490;
+  --color-signal-deep: #155e75;
+  --color-plasma: #7c3aed;
+
+  --color-ok: #047857;
+  --color-warn: #b45309;
+  --color-bad: #be123c;
+
+  --color-tint: rgb(15 23 42 / 0.045);
+  --color-tint-strong: rgb(15 23 42 / 0.085);
+  --color-line: rgb(15 23 42 / 0.12);
+  --color-field: #ffffff;
+  --color-on-signal: #ffffff;
 }
 
 /* --------------------------------------------------------------------- */
@@ -39,6 +82,14 @@
 @layer base {
   :root {
     color-scheme: dark;
+    --grid-line: rgba(148, 163, 184, 0.045);
+    --panel-shadow: none;
+  }
+
+  :root[data-theme='light'] {
+    color-scheme: light;
+    --grid-line: rgba(100, 116, 139, 0.09);
+    --panel-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 14px -6px rgba(15, 23, 42, 0.08);
   }
 
   html {
@@ -54,6 +105,7 @@
     font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     min-height: 100dvh;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 
   /* Faint grid, the one piece of pure decoration. Fixed so content scrolls over it. */
@@ -64,8 +116,8 @@
     pointer-events: none;
     z-index: 0;
     background-image:
-      linear-gradient(to right, rgba(148, 163, 184, 0.045) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(148, 163, 184, 0.045) 1px, transparent 1px);
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
     background-size: 44px 44px;
     mask-image: radial-gradient(ellipse 120% 80% at 50% 0%, #000 35%, transparent 78%);
   }
@@ -82,6 +134,16 @@
   textarea,
   input {
     font-size: 16px;
+  }
+
+  button:not(:disabled),
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-signal);
+    outline-offset: 2px;
   }
 
   ::selection {
@@ -102,10 +164,11 @@
 }
 
 @utility panel {
-  background-color: color-mix(in oklab, var(--color-surface) 82%, transparent);
+  background-color: color-mix(in oklab, var(--color-surface) 86%, transparent);
   border: 1px solid var(--color-edge);
   border-radius: var(--radius-panel);
   backdrop-filter: blur(12px);
+  box-shadow: var(--panel-shadow);
 }
 
 @utility tabular {
@@ -148,6 +211,35 @@
   }
 }
 
+@keyframes acc-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes acc-sheet {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes acc-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
 .acc-pulse {
   animation: acc-pulse 1.4s ease-in-out infinite;
 }
@@ -158,6 +250,7 @@
   position: absolute;
   inset-block: 0;
   inline-size: 35%;
+  pointer-events: none;
   background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-signal) 22%, transparent), transparent);
   animation: acc-sweep 1.9s linear infinite;
 }
@@ -166,10 +259,49 @@
   animation: acc-rise 0.28s ease-out both;
 }
 
+.acc-fade {
+  animation: acc-fade 0.2s ease-out both;
+}
+
+.acc-sheet {
+  animation: acc-sheet 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Loading skeleton: a soft moving highlight, never a flat grey block. */
+.acc-skeleton {
+  background-image: linear-gradient(90deg, var(--color-tint) 25%, var(--color-tint-strong) 50%, var(--color-tint) 75%);
+  background-size: 200% 100%;
+  animation: acc-shimmer 1.6s linear infinite;
+}
+
+/* Page-level entrance: children of a page fade up in sequence. */
+.acc-stagger > * {
+  animation: acc-rise 0.32s ease-out both;
+}
+.acc-stagger > *:nth-child(2) {
+  animation-delay: 0.04s;
+}
+.acc-stagger > *:nth-child(3) {
+  animation-delay: 0.08s;
+}
+.acc-stagger > *:nth-child(4) {
+  animation-delay: 0.12s;
+}
+.acc-stagger > *:nth-child(5) {
+  animation-delay: 0.16s;
+}
+.acc-stagger > *:nth-child(n + 6) {
+  animation-delay: 0.2s;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .acc-pulse,
   .acc-sweep::after,
-  .acc-rise {
+  .acc-rise,
+  .acc-fade,
+  .acc-sheet,
+  .acc-skeleton,
+  .acc-stagger > * {
     animation: none;
   }
 }

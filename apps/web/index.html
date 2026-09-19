@@ -1,7 +1,25 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
+    <!-- Resolve the saved theme before first paint so the page never flashes
+         the wrong one. Mirrors lib/theme.tsx; all storage access is guarded. -->
+    <script>
+      (function () {
+        try {
+          var pref = window.localStorage.getItem('acc-theme') || 'dark';
+          var theme =
+            pref === 'system'
+              ? window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'dark'
+              : pref === 'light'
+                ? 'light'
+                : 'dark';
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {}
+      })();
+    </script>
     <!-- viewport-fit=cover + the safe-area padding in index.css is what makes
          this sit correctly under the iPhone notch and home indicator. -->
     <meta

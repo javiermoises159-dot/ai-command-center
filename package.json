@@ -10,8 +10,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
     "typecheck:core": "tsc --noEmit -p tsconfig.core.json",
-    "test": "tsx --test \"packages/**/*.test.ts\" \"apps/server/**/*.test.ts\"",
-    "test:watch": "tsx --test --watch \"packages/**/*.test.ts\" \"apps/server/**/*.test.ts\"",
+    "test": "tsx --test \"packages/**/*.test.ts\" \"apps/server/**/*.test.ts\" \"apps/web/src/**/*.test.ts\"",
+    "test:watch": "tsx --test --watch \"packages/**/*.test.ts\" \"apps/server/**/*.test.ts\" \"apps/web/src/**/*.test.ts\"",
     "build": "pnpm run build:server && pnpm run build:web",
     "build:server": "node scripts/build-server.mjs",
     "build:web": "pnpm --filter @acc/web build",

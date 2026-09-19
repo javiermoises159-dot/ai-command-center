@@ -17,6 +17,8 @@ export type {
   AgentDefinition,
   AgentExecution,
   AgentStatus,
+  HealthResponse,
+  ListProvidersResponse,
   MissionDetail,
   MissionStatus,
   MissionSummary,
