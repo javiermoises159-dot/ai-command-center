@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    // vite/client supplies the `import.meta.env` and `*.css` module
+    // declarations the web app relies on; harmless for the server packages.
+    "types": ["node", "vite/client"]
+  },
+  "include": ["packages/*/src/**/*.ts", "apps/server/src/**/*.ts", "apps/web/src/**/*.ts", "apps/web/src/**/*.tsx", "scripts/**/*.mjs"],
+  "exclude": ["node_modules", "**/dist/**"]
+}

@@ -1,0 +1,194 @@
+@import 'tailwindcss';
+
+/*
+ * Tailwind v4 CSS-first configuration. Design tokens live here rather than in a
+ * tailwind.config.js, which v4 no longer needs.
+ *
+ * The palette is a dark operations console: near-black base, a cyan signal
+ * colour for anything live, and one accent per agent so the pipeline reads at a
+ * glance on a phone.
+ */
+@theme {
+  --color-void: #05070d;
+  --color-surface: #0b0f1a;
+  --color-surface-2: #111726;
+  --color-edge: #1c2438;
+  --color-edge-bright: #2b3752;
+
+  --color-ink: #e8edf7;
+  --color-ink-dim: #93a1bd;
+  --color-ink-faint: #5d6b87;
+
+  --color-signal: #22d3ee;
+  --color-signal-deep: #0891b2;
+  --color-plasma: #a78bfa;
+
+  --color-ok: #34d399;
+  --color-warn: #fbbf24;
+  --color-bad: #fb7185;
+
+  --font-mono: 'SF Mono', 'JetBrains Mono', ui-monospace, 'Menlo', monospace;
+
+  --radius-panel: 14px;
+}
+
+/* --------------------------------------------------------------------- */
+/* Base                                                                    */
+/* --------------------------------------------------------------------- */
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Stops iOS bouncing the whole page behind the fixed chrome. */
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-void);
+    color: var(--color-ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100dvh;
+  }
+
+  /* Faint grid, the one piece of pure decoration. Fixed so content scrolls over it. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+      linear-gradient(to right, rgba(148, 163, 184, 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.045) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 120% 80% at 50% 0%, #000 35%, transparent 78%);
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* 16px minimum stops iOS Safari zooming the viewport on focus. */
+  textarea,
+  input {
+    font-size: 16px;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-signal) 35%, transparent);
+  }
+}
+
+/* --------------------------------------------------------------------- */
+/* Utilities                                                               */
+/* --------------------------------------------------------------------- */
+
+@utility safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility panel {
+  background-color: color-mix(in oklab, var(--color-surface) 82%, transparent);
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-panel);
+  backdrop-filter: blur(12px);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------- */
+/* Motion                                                                  */
+/* --------------------------------------------------------------------- */
+
+@keyframes acc-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes acc-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@keyframes acc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.acc-pulse {
+  animation: acc-pulse 1.4s ease-in-out infinite;
+}
+
+/* The moving band on a running agent row. */
+.acc-sweep::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inline-size: 35%;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-signal) 22%, transparent), transparent);
+  animation: acc-sweep 1.9s linear infinite;
+}
+
+.acc-rise {
+  animation: acc-rise 0.28s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acc-pulse,
+  .acc-sweep::after,
+  .acc-rise {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------------------------------- */
+/* Scrollbars                                                              */
+/* --------------------------------------------------------------------- */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-edge-bright) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-edge-bright);
+  border-radius: 99px;
+}

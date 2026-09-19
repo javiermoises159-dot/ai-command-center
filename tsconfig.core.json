@@ -1,0 +1,17 @@
+{
+  "//": "Typechecks the dependency-free core: domain, providers, orchestrator, the in-memory adapter and the framework-agnostic HTTP router. It is an architectural guard — if any of these files ever imports Express, Drizzle, Zod or a vendor SDK, this config stops compiling. It also means the core can be typechecked and tested before `pnpm install`.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "packages/domain/src/**/*.ts",
+    "packages/providers/src/**/*.ts",
+    "packages/orchestrator/src/**/*.ts",
+    "packages/repositories/src/memory/**/*.ts",
+    "apps/server/src/http/**/*.ts",
+    "apps/server/src/config.ts",
+    "apps/server/src/config.test.ts",
+    "apps/server/src/logger.ts"
+  ]
+}

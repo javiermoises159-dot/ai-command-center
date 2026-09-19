@@ -1,0 +1,31 @@
+{
+  "name": "ai-command-center",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:core": "tsc --noEmit -p tsconfig.core.json",
+    "test": "tsx --test \"packages/**/*.test.ts\" \"apps/server/**/*.test.ts\"",
+    "test:watch": "tsx --test --watch \"packages/**/*.test.ts\" \"apps/server/**/*.test.ts\"",
+    "build": "pnpm run build:server && pnpm run build:web",
+    "build:server": "node scripts/build-server.mjs",
+    "build:web": "pnpm --filter @acc/web build",
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "pnpm --filter @acc/server dev",
+    "dev:web": "pnpm --filter @acc/web dev",
+    "db:generate": "pnpm --filter @acc/database generate",
+    "db:migrate": "pnpm --filter @acc/database migrate",
+    "verify": "pnpm run typecheck && pnpm run test && pnpm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.0"
+  }
+}

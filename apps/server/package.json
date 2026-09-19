@@ -1,0 +1,19 @@
+{
+  "name": "@acc/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node ../../dist/server/main.js"
+  },
+  "dependencies": {
+    "@acc/contracts": "workspace:*",
+    "@acc/database": "workspace:*",
+    "@acc/domain": "workspace:*",
+    "@acc/orchestrator": "workspace:*",
+    "@acc/providers": "workspace:*",
+    "@acc/repositories": "workspace:*",
+    "express": "^5.1.0"
+  }
+}
