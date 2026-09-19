@@ -20,6 +20,7 @@
     "dev:web": "pnpm --filter @acc/web dev",
     "db:diff": "pnpm --filter @acc/database diff",
     "db:migrate": "pnpm --filter @acc/database migrate",
+    "db:check": "pnpm --filter @acc/database check",
     "openapi": "pnpm --filter @acc/contracts openapi",
     "verify": "pnpm run typecheck && pnpm run test && pnpm run build"
   },
@@ -31,6 +32,9 @@
   },
   "pnpm": {
     "//": "pnpm 10 blocks postinstall scripts by default. These packages ship native binaries that are unusable without their install step: esbuild bundles the server, and Tailwind v4's oxide engine compiles the CSS. Without this list `pnpm install` succeeds but `pnpm build` fails with a confusing binary-not-found error.",
-    "onlyBuiltDependencies": ["esbuild", "@tailwindcss/oxide"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@tailwindcss/oxide"
+    ]
   }
 }

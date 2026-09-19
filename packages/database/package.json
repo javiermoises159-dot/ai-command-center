@@ -12,7 +12,8 @@
   "scripts": {
     "diff": "drizzle-kit generate",
     "migrate": "tsx src/migrate.ts",
-    "studio": "drizzle-kit studio"
+    "studio": "drizzle-kit studio",
+    "check": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f test/sql-contract.sql"
   },
   "dependencies": {
     "drizzle-orm": "^0.44.0",
