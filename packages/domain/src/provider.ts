@@ -9,21 +9,61 @@
 
 import type { AgentId } from './types.ts';
 
-export type ProviderId = 'mock' | 'openai' | 'anthropic' | 'gemini' | 'openai-compatible';
+export type ProviderId = 'mock' | 'ollama' | 'openai' | 'anthropic' | 'gemini' | 'openai-compatible';
 
 /**
- * `available` — implemented and usable right now.
- * `planned`   — the adapter exists as a typed stub and throws
- *               ProviderNotConfiguredError if executed. It is listed by the API
- *               so the UI can show what is coming without pretending it works.
+ * `available`    — implemented, configured and usable right now.
+ * `unconfigured` — implemented, but the credentials (or model) it needs are not
+ *                  set. Executing it fails with PROVIDER_UNCONFIGURED; it never
+ *                  answers with a simulation.
+ * `planned`      — the adapter exists as a typed stub and throws
+ *                  ProviderNotConfiguredError if executed. It is listed by the API
+ *                  so the UI can show what is coming without pretending it works.
+ *
+ * Three different questions, kept apart on purpose: is it *configured*
+ * (`ProviderConfiguration.configured`), is it *available* (this field), and is
+ * it *healthy* (a reachability probe, see `ProviderHealthReport`). A provider
+ * with a key is configured; it is only healthy once something has answered.
  */
-export type ProviderAvailability = 'available' | 'planned';
+export type ProviderAvailability = 'available' | 'unconfigured' | 'planned';
+
+/**
+ * Where a result came from. `real` is a model that actually ran (a vendor API or
+ * a local server); `mock` is the deterministic simulation. A real result is
+ * never labelled mock and a simulation is never labelled real.
+ */
+export type ResultSource = 'real' | 'mock';
+
+/** What an adapter really implements — not what the vendor's marketing page lists. */
+export interface ProviderCapabilities {
+  streaming: boolean;
+  toolCalling: boolean;
+  structuredOutput: boolean;
+  embeddings: boolean;
+  vision: boolean;
+}
+
+export type ProviderCapabilityName = keyof ProviderCapabilities;
+
+/** Whether an adapter has what it needs to run, and if not, what is missing. */
+export interface ProviderConfiguration {
+  configured: boolean;
+  /** User-facing (Spanish) explanation when not configured. */
+  reason: string | null;
+  /** Environment variables the operator sets to configure this adapter. */
+  requires: readonly string[];
+}
 
 export interface ProviderModel {
   id: string;
   label: string;
   /** Context window in tokens, when the vendor publishes one. */
   contextWindow?: number;
+  /**
+   * Capabilities the adapter implements for this model. Absent means "not
+   * declared", which the router reads as "does not have it".
+   */
+  capabilities?: ProviderCapabilities;
 }
 
 /** Output of an agent that already ran, handed to downstream agents. */
@@ -70,6 +110,12 @@ export interface ProviderTask {
   maxTokens?: number;
   /** Correlation data for logs and tracing. Never sent to a vendor verbatim. */
   metadata?: Record<string, string>;
+  /**
+   * Capabilities this call needs from the adapter. An adapter that does not
+   * implement one of them fails with PROVIDER_CAPABILITY_MISMATCH before making
+   * any request, instead of quietly ignoring the requirement.
+   */
+  requires?: readonly ProviderCapabilityName[];
 }
 
 /** The normalised shape every adapter must return, whatever the vendor sends. */
@@ -82,6 +128,10 @@ export interface ProviderResult {
   requestId: string;
   finishReason: 'stop' | 'length' | 'content_filter' | 'other';
   latencyMs: number;
+  /** `real` for a model that actually ran, `mock` for the simulation. */
+  source: ResultSource;
+  /** Always `source === 'mock'`. Kept as its own field so it cannot be missed. */
+  simulated: boolean;
 }
 
 export interface ProviderUsage {
@@ -90,10 +140,39 @@ export interface ProviderUsage {
   totalTokens: number;
 }
 
+/**
+ * What a reachability probe can conclude.
+ *
+ * There is deliberately no `ok` shortcut for "the configuration looks right":
+ * a probe returns `ok` only after something actually answered. `not_connected`
+ * means there was nothing to probe (no credentials, no endpoint), which is not
+ * the same as a service being down.
+ */
+export type ProviderReachability = 'ok' | 'degraded' | 'down' | 'not_connected';
+
+/**
+ * The answer to "are you reachable right now?".
+ *
+ * Adapters report only what they observed. The caller (MADRE's provider
+ * catalog) is what timestamps it and turns it into the stored `ProviderHealth`,
+ * so an adapter never has to know about clocks or storage.
+ */
+export interface ProviderHealthReport {
+  status: ProviderReachability;
+  /** User-facing explanation, written in the language of the application. */
+  detail: string;
+  /** Round trip of the probe in ms, when a request was actually made. */
+  latencyMs?: number;
+}
+
 export interface AIProvider {
   readonly id: ProviderId;
   readonly label: string;
   readonly availability: ProviderAvailability;
+  /** False for a declared stub. Defaults to true. */
+  readonly implemented?: boolean;
+  /** Whether the adapter has its credentials. Absent means "configured iff available". */
+  configuration?(): ProviderConfiguration;
   /** Models this adapter accepts; the first is the default. */
   listModels(): readonly ProviderModel[];
   /**
@@ -103,6 +182,22 @@ export interface AIProvider {
    *  - never throw a raw vendor error type across this boundary.
    */
   execute(task: ProviderTask, signal?: AbortSignal): Promise<ProviderResult>;
+  /**
+   * Optional reachability probe — the extension point every future real
+   * adapter implements (an OpenAI adapter would `GET /v1/models`, an Anthropic
+   * one a one-token request, and so on).
+   *
+   * Contract for implementers:
+   *  - cheap: never a billed generation call;
+   *  - never throws — a failure is reported as `down`, not raised;
+   *  - honours `signal`;
+   *  - returns `not_connected` when there is no credential or endpoint to test,
+   *    rather than pretending the service is down.
+   *
+   * An adapter without this method is reported as `unknown`: nobody can say
+   * whether it answers.
+   */
+  health?(signal?: AbortSignal): Promise<ProviderHealthReport>;
 }
 
 /** Read-only view of a provider, safe to expose over the API. */
@@ -111,16 +206,27 @@ export interface ProviderDescriptor {
   label: string;
   availability: ProviderAvailability;
   models: readonly ProviderModel[];
-  /** Why a `planned` provider is not usable yet. */
+  /** Why a provider that is not `available` cannot be used yet. */
   note?: string;
+  /** False for a declared stub with no implementation behind it. Absent means true. */
+  implemented?: boolean;
+  /** Credentials present. Absent means "configured iff available". Not the same as healthy. */
+  configured?: boolean;
+  /** Environment variables that configure it (names only, never values). */
+  requires?: readonly string[];
 }
 
 export function describeProvider(provider: AIProvider, note?: string): ProviderDescriptor {
+  const configuration = provider.configuration?.();
+  const reason = configuration?.reason ?? undefined;
   return {
     id: provider.id,
     label: provider.label,
     availability: provider.availability,
     models: provider.listModels(),
-    ...(note !== undefined ? { note } : {}),
+    implemented: provider.implemented ?? true,
+    configured: configuration?.configured ?? provider.availability === 'available',
+    requires: configuration?.requires ?? [],
+    ...(note !== undefined ? { note } : reason !== undefined ? { note: reason } : {}),
   };
 }

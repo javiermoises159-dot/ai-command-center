@@ -1,268 +1,117 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Icon } from '../components/icons.tsx';
-import { Badge, EmptyState, Notice, PageHeader, Panel, Segmented } from '../components/primitives.tsx';
-import { cx } from '../lib/format.ts';
+import { Badge, EmptyState, ErrorBanner, ListSkeleton, Notice, PageHeader, Panel, SectionTitle } from '../components/primitives.tsx';
+import { useMadreTools } from '../hooks/useMadre.ts';
+import { useRecentMissions } from '../hooks/useRecentMissions.ts';
+import { t } from '../i18n/index.ts';
+import { absoluteTime, cleanPrompt, cx, excerpt } from '../lib/format.ts';
+import { Markdown } from '../lib/markdown.tsx';
+import { href } from '../lib/router.tsx';
 
 /**
- * Everything on this screen is MOCK DATA. The Research Engine does not exist:
- * no search runs, no source is fetched, no citation is verified. The dataset is
- * shaped like the future engine's output so the layout can be designed against
- * it, and every source lives on an `example.*` domain so it cannot be mistaken
- * for a real reference.
+ * Research shows what the Research agent actually wrote for your missions, and
+ * says plainly whether live sources were available. When web search is not
+ * connected the findings come from the model's own knowledge: they are leads to
+ * check, not verified facts, and every one of them is labelled that way.
  */
 
-interface MockSource {
-  id: string;
-  name: string;
-  url: string;
-  kind: 'Article' | 'Report' | 'Dataset' | 'Registry';
-}
-
-interface MockResult {
-  title: string;
-  snippet: string;
-  sourceId: string;
-}
-
-interface MockCitation {
-  quote: string;
-  sourceId: string;
-  note: string;
-}
-
-interface MockSearch {
-  id: string;
-  query: string;
-  ago: string;
-  summary: string;
-  results: MockResult[];
-  sources: MockSource[];
-  citations: MockCitation[];
-}
-
-const SEARCHES: readonly MockSearch[] = [
-  {
-    id: 's1',
-    query: 'Online bakery market in Italy',
-    ago: '2 hours ago',
-    summary: 'Sample summary: demand signals, typical price bands and the main competing formats.',
-    sources: [
-      { id: 'a', name: 'Sample market overview', url: 'https://reports.example.com/bakery-overview', kind: 'Report' },
-      { id: 'b', name: 'Sample retail trends article', url: 'https://news.example.org/retail-trends', kind: 'Article' },
-      { id: 'c', name: 'Sample business registry', url: 'https://registry.example.net/food-businesses', kind: 'Registry' },
-    ],
-    results: [
-      { title: 'Sample: category size and growth', snippet: 'A placeholder passage describing how a category might be sized, with the assumptions listed separately.', sourceId: 'a' },
-      { title: 'Sample: who sells online today', snippet: 'A placeholder passage comparing three comparable sellers by angle rather than by revenue.', sourceId: 'b' },
-      { title: 'Sample: registrations by region', snippet: 'A placeholder passage about the number of registered food businesses per region.', sourceId: 'c' },
-    ],
-    citations: [
-      { quote: 'Placeholder quotation about category growth.', sourceId: 'a', note: 'Sample citation — not a real quotation.' },
-      { quote: 'Placeholder quotation about online competitors.', sourceId: 'b', note: 'Sample citation — not a real quotation.' },
-    ],
-  },
-  {
-    id: 's2',
-    query: 'Food labelling and e-commerce rules (EU)',
-    ago: 'Yesterday',
-    summary: 'Sample summary: the kinds of labelling and distance-selling obligations a food seller would check.',
-    sources: [
-      { id: 'a', name: 'Sample regulation guide', url: 'https://guides.example.org/food-labelling', kind: 'Article' },
-      { id: 'b', name: 'Sample compliance checklist', url: 'https://compliance.example.com/checklist', kind: 'Dataset' },
-    ],
-    results: [
-      { title: 'Sample: mandatory label fields', snippet: 'A placeholder list of the fields a food label typically has to carry.', sourceId: 'a' },
-      { title: 'Sample: distance-selling basics', snippet: 'A placeholder passage on information a seller must give before purchase.', sourceId: 'b' },
-    ],
-    citations: [
-      { quote: 'Placeholder quotation about label content.', sourceId: 'a', note: 'Sample citation — not a real quotation.' },
-    ],
-  },
-  {
-    id: 's3',
-    query: 'Shipping perishable goods within Italy',
-    ago: '3 days ago',
-    summary: 'Sample summary: carrier options and packaging considerations for short-shelf-life products.',
-    sources: [
-      { id: 'a', name: 'Sample carrier comparison', url: 'https://logistics.example.com/carriers', kind: 'Report' },
-      { id: 'b', name: 'Sample packaging study', url: 'https://packaging.example.net/study', kind: 'Report' },
-    ],
-    results: [
-      { title: 'Sample: carrier lead times', snippet: 'A placeholder table comparing delivery windows across three carriers.', sourceId: 'a' },
-      { title: 'Sample: protective packaging', snippet: 'A placeholder passage on packaging that limits breakage in transit.', sourceId: 'b' },
-    ],
-    citations: [
-      { quote: 'Placeholder quotation about delivery windows.', sourceId: 'a', note: 'Sample citation — not a real quotation.' },
-      { quote: 'Placeholder quotation about packaging.', sourceId: 'b', note: 'Sample citation — not a real quotation.' },
-    ],
-  },
-];
-
-type Pane = 'results' | 'sources' | 'citations';
-
 export function ResearchPage() {
-  const [query, setQuery] = useState('');
-  const [selectedId, setSelectedId] = useState<string>(SEARCHES[0]?.id ?? '');
-  const [pane, setPane] = useState<Pane>('results');
+  const recent = useRecentMissions(20);
+  const tools = useMadreTools();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const copy = t.research;
 
-  const needle = query.trim().toLowerCase();
-  const visible = SEARCHES.filter((s) => s.query.toLowerCase().includes(needle));
-  const selected = SEARCHES.find((s) => s.id === selectedId) ?? visible[0];
+  const search = tools.data?.items.find((tool) => tool.id === 'web.search') ?? null;
+  const searchConnected = search !== null && (search.status === 'AVAILABLE' || search.status === 'CONNECTED');
+
+  const findings = useMemo(
+    () =>
+      recent.missions.flatMap((mission) => {
+        const agent = mission.runs[0]?.agents.find((a) => a.agentId === 'research' && a.status === 'completed');
+        return agent?.result != null
+          ? [{ id: mission.id, title: mission.title, text: agent.result, at: agent.completedAt ?? mission.updatedAt, provider: agent.usage?.provider ?? null }]
+          : [];
+      }),
+    [recent.missions],
+  );
+  const selected = findings.find((f) => f.id === selectedId) ?? findings[0];
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        icon="search"
-        title="Research"
-        description="The future research engine: every finding backed by a named source and a citation you can check. This screen shows the shape it will take."
-      />
+      <PageHeader icon="search" title={copy.title} description={copy.description} />
 
-      <Notice tone="mock" title="Mock data — the Research Engine is not built">
-        Nothing on this screen was searched or fetched. The searches, sources and citations below are placeholders on
-        example domains, here to design the layout against.
-      </Notice>
+      {tools.data !== null && (
+        <Notice tone={searchConnected ? 'live' : 'mock'} title={searchConnected ? copy.notice.connectedTitle : copy.notice.disconnectedTitle}>
+          {searchConnected ? copy.notice.connectedBody : copy.notice.disconnectedBody}
+        </Notice>
+      )}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        {/* --------------------------------------------------- Recent searches */}
-        <section aria-label="Recent searches" className="space-y-3">
-          <div className="relative">
-            <Icon
-              name="search"
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-faint)]"
-            />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter recent searches"
-              aria-label="Filter recent searches"
-              className="min-h-[44px] w-full rounded-xl border border-[var(--color-edge-bright)] bg-[var(--color-field)] py-2 pl-9 pr-3 text-[var(--color-ink)] placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-signal)]/55 focus:outline-none focus:ring-2 focus:ring-[var(--color-signal)]/30"
-            />
-          </div>
-
-          <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-ink-faint)]">
-            Recent searches
-          </h2>
-
-          {visible.length === 0 ? (
-            <p className="rounded-xl bg-[var(--color-tint)] px-3 py-3 text-[0.8rem] text-[var(--color-ink-faint)]">
-              No recent search matches “{query.trim()}”.
-            </p>
-          ) : (
+      {recent.error !== null && recent.missions.length === 0 ? (
+        <ErrorBanner message={recent.error} onRetry={recent.refresh} />
+      ) : recent.loading && recent.missions.length === 0 ? (
+        <ListSkeleton rows={3} />
+      ) : findings.length === 0 ? (
+        <EmptyState icon="search" title={copy.empty.title} body={copy.empty.body} />
+      ) : (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
+          <section aria-label={copy.missionsAria} className="space-y-2">
+            <SectionTitle>{copy.fromMissions}</SectionTitle>
             <ul className="space-y-1.5">
-              {visible.map((search) => {
-                const active = search.id === selected?.id;
+              {findings.map((f) => {
+                const active = f.id === selected?.id;
                 return (
-                  <li key={search.id}>
+                  <li key={f.id}>
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedId(search.id);
-                        setPane('results');
-                      }}
+                      onClick={() => setSelectedId(f.id)}
                       aria-pressed={active}
-                      className={cx(
-                        'w-full rounded-xl px-3.5 py-3 text-left transition',
-                        active
-                          ? 'bg-[var(--color-signal)]/12 ring-1 ring-[var(--color-signal)]/40'
-                          : 'panel hover:bg-[var(--color-tint)]',
-                      )}
+                      className={cx('w-full rounded-xl px-3.5 py-3 text-left transition', active ? 'bg-[var(--color-signal)]/12 ring-1 ring-[var(--color-signal)]/40' : 'panel hover:bg-[var(--color-tint)]')}
                     >
-                      <span className="block text-[0.86rem] font-medium leading-snug text-[var(--color-ink)]">{search.query}</span>
-                      <span className="tabular mt-1 flex items-center gap-2 text-[0.7rem] text-[var(--color-ink-faint)]">
-                        {search.ago} · {search.results.length} results · {search.sources.length} sources
-                      </span>
+                      <span className="block text-[0.86rem] font-medium leading-snug text-[var(--color-ink)]">{cleanPrompt(f.title)}</span>
+                      <span className="mt-1 line-clamp-2 block text-[0.74rem] text-[var(--color-ink-faint)]">{excerpt(f.text, 110)}</span>
                     </button>
                   </li>
                 );
               })}
             </ul>
-          )}
-        </section>
+          </section>
 
-        {/* ------------------------------------------------------------ Detail */}
-        <section aria-label="Search details" className="min-w-0">
-          {selected === undefined ? (
-            <EmptyState icon="search" title="Select a search" body="Pick a recent search to see its results, sources and citations." />
-          ) : (
-            <div className="space-y-4">
-              <Panel className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-base font-semibold text-[var(--color-ink)]">{selected.query}</h2>
-                  <Badge tone="warn">Mock</Badge>
+          {selected !== undefined && (
+            <section aria-label={copy.findingAria} className="min-w-0 space-y-3">
+              <Panel className="p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <h2 className="min-w-0 flex-1 text-base font-semibold text-[var(--color-ink)]">{cleanPrompt(selected.title)}</h2>
+                  <div className="flex gap-1.5">
+                    <Badge tone={searchConnected ? 'ok' : 'warn'}>{searchConnected ? copy.badges.live : copy.badges.unverified}</Badge>
+                    {selected.provider === 'mock' && <Badge tone="warn">{copy.badges.simulated}</Badge>}
+                  </div>
                 </div>
-                <p className="mt-1.5 text-[0.82rem] leading-relaxed text-[var(--color-ink-dim)]">{selected.summary}</p>
+                <p className="mt-1 text-[0.7rem] text-[var(--color-ink-faint)]">{absoluteTime(selected.at)}</p>
+                <div className="mt-3">
+                  <Markdown source={selected.text} />
+                </div>
+                <a href={href({ name: 'mission', id: selected.id })} className="mt-4 inline-flex min-h-[44px] items-center gap-1.5 text-[0.8rem] font-medium text-[var(--color-signal)] hover:underline">
+                  {copy.openMission}
+                  <Icon name="arrow-right" className="h-4 w-4" />
+                </a>
               </Panel>
-
-              <Segmented
-                label="Search detail"
-                value={pane}
-                onChange={setPane}
-                options={[
-                  { value: 'results', label: 'Results', count: selected.results.length },
-                  { value: 'sources', label: 'Sources', count: selected.sources.length },
-                  { value: 'citations', label: 'Citations', count: selected.citations.length },
-                ]}
-              />
-
-              <div key={`${selected.id}-${pane}`} className="acc-fade space-y-2">
-                {pane === 'results' &&
-                  selected.results.map((result) => {
-                    const source = selected.sources.find((s) => s.id === result.sourceId);
-                    return (
-                      <Panel key={result.title} as="article" className="px-4 py-3">
-                        <h3 className="text-[0.9rem] font-medium text-[var(--color-ink)]">{result.title}</h3>
-                        <p className="mt-1 text-[0.8rem] leading-relaxed text-[var(--color-ink-dim)]">{result.snippet}</p>
-                        {source !== undefined && (
-                          <p className="mt-2 flex items-center gap-1.5 text-[0.7rem] text-[var(--color-ink-faint)]">
-                            <Icon name="link" className="h-3 w-3" />
-                            {source.name}
-                          </p>
-                        )}
-                      </Panel>
-                    );
-                  })}
-
-                {pane === 'sources' &&
-                  selected.sources.map((source) => (
-                    <Panel key={source.id} as="article" className="flex items-start gap-3 px-4 py-3">
-                      <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--color-tint)] text-[var(--color-ink-faint)] ring-1 ring-[var(--color-line)]">
-                        <Icon name="globe" className="h-4 w-4" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <h3 className="truncate text-[0.88rem] font-medium text-[var(--color-ink)]">{source.name}</h3>
-                          <Badge>{source.kind}</Badge>
-                        </div>
-                        {/* Plain text on purpose: these URLs are not real and must not be clickable. */}
-                        <p className="mt-0.5 break-all font-mono text-[0.72rem] text-[var(--color-ink-faint)]">{source.url}</p>
-                      </div>
-                    </Panel>
-                  ))}
-
-                {pane === 'citations' &&
-                  selected.citations.map((citation) => {
-                    const source = selected.sources.find((s) => s.id === citation.sourceId);
-                    return (
-                      <Panel key={citation.quote} as="article" className="px-4 py-3">
-                        <div className="flex gap-3">
-                          <Icon name="quote" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-signal)]" />
-                          <div className="min-w-0">
-                            <p className="text-[0.86rem] italic leading-relaxed text-[var(--color-ink)]">{citation.quote}</p>
-                            <p className="mt-1.5 text-[0.72rem] text-[var(--color-ink-faint)]">
-                              {source?.name ?? 'Unknown source'} · {citation.note}
-                            </p>
-                          </div>
-                        </div>
-                      </Panel>
-                    );
-                  })}
-              </div>
-            </div>
+            </section>
           )}
-        </section>
-      </div>
+        </div>
+      )}
+
+      <section>
+        <SectionTitle>{copy.labelsTitle}</SectionTitle>
+        <Panel className="divide-y divide-[var(--color-edge)]">
+          {copy.labels.map((l) => (
+            <div key={l.label} className="flex items-baseline gap-3 px-4 py-2.5">
+              <Badge className="w-28 justify-center">{l.label}</Badge>
+              <p className="text-[0.8rem] text-[var(--color-ink-dim)]">{l.body}</p>
+            </div>
+          ))}
+        </Panel>
+      </section>
     </div>
   );
 }

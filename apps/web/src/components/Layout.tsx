@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useHealth } from '../hooks/useApi.ts';
+import { t } from '../i18n/index.ts';
 import { cx } from '../lib/format.ts';
 import { NAV_ITEMS, type NavItem } from '../lib/nav.ts';
 import { href, sectionOf, useRouter } from '../lib/router.tsx';
@@ -46,18 +47,18 @@ export function Layout({ children }: { children: ReactNode }) {
 function Sidebar({ active }: { active: NavItem['name'] | null }) {
   return (
     <aside
-      aria-label="Primary"
+      aria-label={t.layout.nav.primaryAria}
       className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-[var(--color-edge)] bg-[var(--color-surface)]/90 backdrop-blur-xl lg:flex"
     >
       <a href={href({ name: 'dashboard' })} className="flex items-center gap-3 px-5 pb-5 pt-6">
         <Mark className="h-8 w-8" />
         <span className="leading-tight">
-          <span className="block text-[0.95rem] font-semibold tracking-tight text-[var(--color-ink)]">AI Command Center</span>
-          <span className="block text-[0.68rem] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">Mission control</span>
+          <span className="block text-[0.95rem] font-semibold tracking-tight text-[var(--color-ink)]">{t.layout.brand.name}</span>
+          <span className="block text-[0.68rem] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">{t.layout.brand.tagline}</span>
         </span>
       </a>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-2" aria-label="Sections">
+      <nav className="flex-1 overflow-y-auto px-3 py-2" aria-label={t.layout.nav.sectionsAria}>
         <ul className="space-y-0.5">
           {NAV_ITEMS.map((item) => {
             const current = item.name === active;
@@ -99,8 +100,10 @@ function SystemStatus({ compact = false }: { compact?: boolean }) {
   const online = health.data !== null && health.error === null;
   const checking = health.loading && health.data === null;
 
-  const label = checking ? 'Checking…' : online ? 'API online' : 'API unreachable';
-  const detail = online ? `v${health.data?.health.version} · ${health.data?.health.provider ?? 'no provider'}` : 'Is the server running?';
+  const label = checking ? t.layout.system.checking : online ? t.layout.system.online : t.layout.system.offline;
+  const detail = online
+    ? `v${health.data?.health.version} · ${health.data?.health.provider ?? t.layout.system.noProvider}`
+    : t.layout.system.offlineHint;
 
   const light = (
     <span
@@ -117,7 +120,7 @@ function SystemStatus({ compact = false }: { compact?: boolean }) {
       <a
         href={href({ name: 'settings' })}
         className="flex items-center gap-2 rounded-full bg-[var(--color-tint)] px-2.5 py-1.5 text-[0.7rem] text-[var(--color-ink-dim)] ring-1 ring-[var(--color-line)]"
-        aria-label={`System status: ${label}`}
+        aria-label={t.layout.system.statusAria(label)}
       >
         {light}
         {label}
@@ -129,7 +132,7 @@ function SystemStatus({ compact = false }: { compact?: boolean }) {
     <a
       href={href({ name: 'settings' })}
       className="flex items-center gap-2.5 rounded-xl bg-[var(--color-tint)] px-3 py-2.5 ring-1 ring-[var(--color-line)] transition hover:bg-[var(--color-tint-strong)]"
-      aria-label={`System status: ${label}. Open settings`}
+      aria-label={t.layout.system.statusOpenSettingsAria(label)}
     >
       {light}
       <span className="min-w-0 leading-tight">
@@ -149,7 +152,7 @@ function ThemeToggle({ variant }: { variant: 'row' | 'icon' }) {
       <button
         type="button"
         onClick={toggle}
-        aria-label={`Switch to ${next} mode`}
+        aria-label={next === 'light' ? t.layout.theme.switchToLight : t.layout.theme.switchToDark}
         className="grid h-9 w-9 place-items-center rounded-full bg-[var(--color-tint)] text-[var(--color-ink-dim)] ring-1 ring-[var(--color-line)] transition hover:text-[var(--color-ink)] active:scale-95"
       >
         <Icon name={resolved === 'dark' ? 'sun' : 'moon'} className="h-[1.05rem] w-[1.05rem]" />
@@ -164,7 +167,7 @@ function ThemeToggle({ variant }: { variant: 'row' | 'icon' }) {
       className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[0.85rem] text-[var(--color-ink-dim)] transition hover:bg-[var(--color-tint)] hover:text-[var(--color-ink)]"
     >
       <Icon name={resolved === 'dark' ? 'sun' : 'moon'} className="h-[1.15rem] w-[1.15rem]" />
-      {resolved === 'dark' ? 'Light mode' : 'Dark mode'}
+      {resolved === 'dark' ? t.layout.theme.light : t.layout.theme.dark}
     </button>
   );
 }
@@ -180,7 +183,7 @@ function MobileTopBar() {
         <a href={href({ name: 'dashboard' })} className="flex min-w-0 items-center gap-2.5">
           <Mark className="h-6 w-6" />
           <span className="truncate text-[0.82rem] font-semibold tracking-[0.14em] text-[var(--color-ink)] uppercase">
-            Command Center
+            {t.layout.brand.short}
           </span>
         </a>
         <div className="ml-auto flex items-center gap-2">
@@ -213,7 +216,7 @@ function BottomNav({
 
   return (
     <nav
-      aria-label="Primary"
+      aria-label={t.layout.nav.primaryAria}
       className="safe-bottom fixed inset-x-0 bottom-0 z-20 border-t border-[var(--color-edge)] bg-[var(--color-void)]/92 backdrop-blur-xl lg:hidden"
     >
       <div className="mx-auto flex w-full max-w-5xl">
@@ -230,7 +233,7 @@ function BottomNav({
         ))}
         <button type="button" onClick={onMore} aria-haspopup="dialog" aria-expanded={moreOpen} className={tab(moreActive)}>
           <Icon name="more" className="h-[1.3rem] w-[1.3rem]" />
-          More
+          {t.layout.nav.more}
         </button>
       </div>
     </nav>
@@ -261,10 +264,10 @@ function MoreSheet({ active, onClose }: { active: NavItem['name'] | null; onClos
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="More sections">
+    <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label={t.layout.nav.moreDialogAria}>
       <button
         type="button"
-        aria-label="Close menu"
+        aria-label={t.layout.nav.closeMenu}
         onClick={onClose}
         className="acc-fade absolute inset-0 bg-black/55 backdrop-blur-[2px]"
         tabIndex={-1}
@@ -273,12 +276,12 @@ function MoreSheet({ active, onClose }: { active: NavItem['name'] | null; onClos
         <div className="mx-auto max-w-lg px-4 pb-4 pt-3">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--color-edge-bright)]" aria-hidden />
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-ink-faint)]">More sections</h2>
+            <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-ink-faint)]">{t.layout.nav.moreTitle}</h2>
             <button
               ref={closeRef}
               type="button"
               onClick={onClose}
-              aria-label="Close"
+              aria-label={t.common.actions.close}
               className="grid h-8 w-8 place-items-center rounded-full bg-[var(--color-tint)] text-[var(--color-ink-dim)]"
             >
               <Icon name="x" className="h-4 w-4" />

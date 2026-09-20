@@ -19,14 +19,25 @@ export interface AgentMeta {
 }
 
 const META: Record<string, AgentMeta> = {
-  strategy: { icon: 'compass', capabilities: ['Positioning', 'Target segment', 'Success criteria', 'Strategic risk'] },
-  research: { icon: 'search', capabilities: ['Market context', 'Competitors', 'Constraints', 'Open questions'] },
-  code: { icon: 'code', capabilities: ['Stack choice', 'System shape', 'Build phases', 'Technical risk'] },
-  design: { icon: 'pen', capabilities: ['User journey', 'Interface principles', 'Visual direction', 'Key screen'] },
-  marketing: { icon: 'megaphone', capabilities: ['Core message', 'Channels', 'Launch sequence', 'Success metric'] },
-  finance: { icon: 'trending-up', capabilities: ['Cost structure', 'Unit economics', 'Break-even', 'Funding need'] },
-  qa: { icon: 'shield-check', capabilities: ['Per-agent verdicts', 'Contradictions', 'Gaps', 'Go / no-go'] },
-  integrator: { icon: 'layers', capabilities: ['Execution brief', 'Next actions', 'Carried risks', 'Open items'] },
+  strategy: { icon: 'compass', capabilities: ['Posicionamiento', 'Segmento objetivo', 'Criterios de éxito', 'Riesgo estratégico'] },
+  research: { icon: 'search', capabilities: ['Contexto de mercado', 'Competencia', 'Restricciones', 'Preguntas abiertas'] },
+  engineering: { icon: 'code', capabilities: ['Arquitectura', 'Elección de stack', 'Fases de construcción', 'Riesgo técnico'] },
+  content: { icon: 'pen', capabilities: [] },
+  video: { icon: 'video', capabilities: [] },
+  social: { icon: 'megaphone', capabilities: [] },
+  sales: { icon: 'trending-up', capabilities: [] },
+  browser: { icon: 'globe', capabilities: [] },
+  computer_use: { icon: 'monitor', capabilities: [] },
+  data: { icon: 'table', capabilities: [] },
+  legal: { icon: 'file-text', capabilities: [] },
+  automation: { icon: 'zap', capabilities: [] },
+  trading_research: { icon: 'trending-up', capabilities: [] },
+  code: { icon: 'code', capabilities: ['Elección de stack', 'Forma del sistema', 'Fases de construcción', 'Riesgo técnico'] },
+  design: { icon: 'pen', capabilities: ['Recorrido del usuario', 'Principios de interfaz', 'Dirección visual', 'Pantalla clave'] },
+  marketing: { icon: 'megaphone', capabilities: ['Mensaje principal', 'Canales', 'Secuencia de lanzamiento', 'Métrica de éxito'] },
+  finance: { icon: 'trending-up', capabilities: ['Estructura de costes', 'Economía unitaria', 'Punto de equilibrio', 'Necesidad de financiación'] },
+  qa: { icon: 'shield-check', capabilities: ['Veredicto por agente', 'Contradicciones', 'Lagunas', 'Seguir o parar'] },
+  integrator: { icon: 'layers', capabilities: ['Informe de ejecución', 'Próximas acciones', 'Riesgos heredados', 'Puntos abiertos'] },
 };
 
 const FALLBACK: AgentMeta = { icon: 'bot', capabilities: [] };

@@ -16,6 +16,8 @@ export async function recoverUnfinishedRuns(deps: {
   repositories: Repositories;
   logger: Logger;
   clock?: Clock;
+  /** Return true to leave a run alone, e.g. a MADRE run paused for approval that can resume. */
+  keepRun?: (runId: string) => Promise<boolean>;
 }): Promise<number> {
   const clock = deps.clock ?? systemClock;
   const log = deps.logger.child({ component: 'recovery' });
@@ -24,22 +26,25 @@ export async function recoverUnfinishedRuns(deps: {
   if (orphans.length === 0) return 0;
 
   const at = clock.now();
+  let closed = 0;
   for (const run of orphans) {
+    if (deps.keepRun !== undefined && (await deps.keepRun(run.id))) continue;
+    closed++;
     // The agent that was executing when the process died will never report
     // back. Leaving it `running` inside a `failed` run would show a spinner
     // that never stops, so it is failed explicitly. Agents that never started
     // are skipped; agents that already finished keep their results.
     const interrupted = (await deps.repositories.agents.listByRun(run.id)).filter((a) => a.status === 'running');
     for (const agent of interrupted) {
-      await deps.repositories.agents.markFailed(agent.id, 'The server restarted while this agent was running.', at);
+      await deps.repositories.agents.markFailed(agent.id, 'El servidor se reinició mientras este agente estaba en ejecución.', at);
     }
     await deps.repositories.agents.markRemainingSkipped(run.id, at);
     await deps.repositories.runs.markFinished(run.id, 'failed', at, {
-      error: 'The server restarted while this run was in progress.',
+      error: 'El servidor se reinició mientras esta ejecución estaba en curso.',
     });
     await deps.repositories.missions.updateStatus(run.missionId, 'failed', at);
   }
 
-  log.warn('closed runs orphaned by a restart', { count: orphans.length });
-  return orphans.length;
+  if (closed > 0) log.warn('closed runs orphaned by a restart', { count: closed });
+  return closed;
 }

@@ -9,6 +9,7 @@
  */
 
 import { ValidationError, type FieldIssue } from './errors.ts';
+import type { RunMode } from './ports.ts';
 import { MISSION_STATUSES, type MissionStatus } from './types.ts';
 
 export const PROMPT_MIN_LENGTH = 12;
@@ -21,11 +22,23 @@ export interface CreateMissionInput {
   model?: string;
   /** When false the mission is created but not queued. Defaults to true. */
   autoStart?: boolean;
+  /** `classic` runs the fixed eight-agent pipeline; `madre` compiles and plans first. */
+  mode?: RunMode;
 }
 
 export interface RunMissionInput {
   providerId?: string;
   model?: string;
+  mode?: RunMode;
+}
+
+export const RUN_MODES = ['classic', 'madre'] as const;
+
+function parseMode(value: unknown, issues: FieldIssue[]): RunMode | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'string' && (RUN_MODES as readonly string[]).includes(value)) return value as RunMode;
+  issues.push({ path: 'mode', message: `Debe ser uno de: ${RUN_MODES.join(', ')}.` });
+  return undefined;
 }
 
 export interface ListMissionsQuery {
@@ -46,13 +59,13 @@ function optionalString(
 ): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   if (typeof value !== 'string') {
-    issues.push({ path, message: 'Must be a string.' });
+    issues.push({ path, message: 'Debe ser un texto.' });
     return undefined;
   }
   const trimmed = value.trim();
   if (trimmed.length === 0) return undefined;
   if (trimmed.length > maxLength) {
-    issues.push({ path, message: `Must be at most ${maxLength} characters.` });
+    issues.push({ path, message: `Debe tener como máximo ${maxLength} caracteres.` });
     return undefined;
   }
   return trimmed;
@@ -62,31 +75,32 @@ export function parseCreateMissionInput(body: unknown): CreateMissionInput {
   const issues: FieldIssue[] = [];
 
   if (!isRecord(body)) {
-    throw new ValidationError([{ path: 'body', message: 'Expected a JSON object.' }]);
+    throw new ValidationError([{ path: 'body', message: 'Se esperaba un objeto JSON.' }]);
   }
 
   let prompt = '';
   if (typeof body['prompt'] !== 'string') {
-    issues.push({ path: 'prompt', message: 'Required. Describe the mission in plain language.' });
+    issues.push({ path: 'prompt', message: 'Obligatorio. Describe la misión con tus propias palabras.' });
   } else {
     prompt = body['prompt'].trim();
     if (prompt.length < PROMPT_MIN_LENGTH) {
       issues.push({
         path: 'prompt',
-        message: `Must be at least ${PROMPT_MIN_LENGTH} characters so the agents have something to work with.`,
+        message: `Debe tener al menos ${PROMPT_MIN_LENGTH} caracteres para que los agentes tengan algo con lo que trabajar.`,
       });
     } else if (prompt.length > PROMPT_MAX_LENGTH) {
-      issues.push({ path: 'prompt', message: `Must be at most ${PROMPT_MAX_LENGTH} characters.` });
+      issues.push({ path: 'prompt', message: `Debe tener como máximo ${PROMPT_MAX_LENGTH} caracteres.` });
     }
   }
 
   const providerId = optionalString(body['providerId'], 'providerId', issues, 40);
   const model = optionalString(body['model'], 'model', issues, 120);
+  const mode = parseMode(body['mode'], issues);
 
   let autoStart = true;
   if (body['autoStart'] !== undefined) {
     if (typeof body['autoStart'] !== 'boolean') {
-      issues.push({ path: 'autoStart', message: 'Must be a boolean.' });
+      issues.push({ path: 'autoStart', message: 'Debe ser verdadero o falso.' });
     } else {
       autoStart = body['autoStart'];
     }
@@ -99,6 +113,7 @@ export function parseCreateMissionInput(body: unknown): CreateMissionInput {
     autoStart,
     ...(providerId !== undefined ? { providerId } : {}),
     ...(model !== undefined ? { model } : {}),
+    ...(mode !== undefined ? { mode } : {}),
   };
 }
 
@@ -107,17 +122,19 @@ export function parseRunMissionInput(body: unknown): RunMissionInput {
   const issues: FieldIssue[] = [];
 
   if (!isRecord(body)) {
-    throw new ValidationError([{ path: 'body', message: 'Expected a JSON object.' }]);
+    throw new ValidationError([{ path: 'body', message: 'Se esperaba un objeto JSON.' }]);
   }
 
   const providerId = optionalString(body['providerId'], 'providerId', issues, 40);
   const model = optionalString(body['model'], 'model', issues, 120);
+  const mode = parseMode(body['mode'], issues);
 
   if (issues.length > 0) throw new ValidationError(issues);
 
   return {
     ...(providerId !== undefined ? { providerId } : {}),
     ...(model !== undefined ? { model } : {}),
+    ...(mode !== undefined ? { mode } : {}),
   };
 }
 
@@ -136,7 +153,7 @@ export function parseListMissionsQuery(query: Record<string, string | undefined>
     if ((MISSION_STATUSES as readonly string[]).includes(rawStatus)) {
       status = rawStatus as MissionStatus;
     } else {
-      issues.push({ path: 'status', message: `Must be one of: ${MISSION_STATUSES.join(', ')}.` });
+      issues.push({ path: 'status', message: `Debe ser uno de: ${MISSION_STATUSES.join(', ')}.` });
     }
   }
 
@@ -156,11 +173,11 @@ function parseBoundedInt(
   if (raw === undefined || raw === '') return fallback;
   const parsed = Number(raw);
   if (!Number.isInteger(parsed)) {
-    issues.push({ path, message: 'Must be an integer.' });
+    issues.push({ path, message: 'Debe ser un número entero.' });
     return fallback;
   }
   if (parsed < min || parsed > max) {
-    issues.push({ path, message: `Must be between ${min} and ${max}.` });
+    issues.push({ path, message: `Debe estar entre ${min} y ${max}.` });
     return fallback;
   }
   return parsed;

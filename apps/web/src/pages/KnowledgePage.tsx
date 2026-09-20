@@ -14,17 +14,20 @@ import {
   Stat,
 } from '../components/primitives.tsx';
 import { useRecentMissions } from '../hooks/useRecentMissions.ts';
+import { MemoryPanel } from '../components/madre/MemoryPanel.tsx';
+import { LOCALE, t } from '../i18n/index.ts';
 import { absoluteTime, cleanPrompt, excerpt } from '../lib/format.ts';
 import { href } from '../lib/router.tsx';
 import type { MissionDetail } from '../lib/api.ts';
 
-type Tab = 'collections' | 'documents' | 'sources' | 'search';
+type Tab = 'memory' | 'collections' | 'documents' | 'sources' | 'search';
 
 const TABS: readonly { value: Tab; label: string }[] = [
-  { value: 'collections', label: 'Collections' },
-  { value: 'documents', label: 'Documents' },
-  { value: 'sources', label: 'Sources' },
-  { value: 'search', label: 'Search' },
+  { value: 'memory', label: t.knowledge.tabs.memory },
+  { value: 'collections', label: t.knowledge.tabs.collections },
+  { value: 'documents', label: t.knowledge.tabs.documents },
+  { value: 'sources', label: t.knowledge.tabs.sources },
+  { value: 'search', label: t.knowledge.tabs.search },
 ];
 
 /** A piece of text the app already holds and can search. */
@@ -32,7 +35,9 @@ interface Entry {
   key: string;
   missionId: string;
   missionTitle: string;
-  /** "Final brief" or the name of the agent that wrote it. */
+  /** Whether this is a mission's final brief or one agent's individual result. */
+  kind: 'brief' | 'output';
+  /** Text shown as the origin: "Brief final" or the name of the agent that wrote it. */
   origin: string;
   text: string;
   at: string;
@@ -53,7 +58,8 @@ function collectEntries(missions: readonly MissionDetail[]): { briefs: Entry[]; 
         key: `${mission.id}:brief`,
         missionId: mission.id,
         missionTitle: mission.title,
-        origin: 'Final brief',
+        kind: 'brief',
+        origin: t.knowledge.origin.finalBrief,
         text: mission.finalResult,
         at: mission.updatedAt,
       });
@@ -65,6 +71,7 @@ function collectEntries(missions: readonly MissionDetail[]): { briefs: Entry[]; 
           key: agent.id,
           missionId: mission.id,
           missionTitle: mission.title,
+          kind: 'output',
           origin: agent.name,
           text: agent.result,
           at: agent.completedAt ?? mission.updatedAt,
@@ -77,26 +84,25 @@ function collectEntries(missions: readonly MissionDetail[]): { briefs: Entry[]; 
 
 export function KnowledgePage() {
   const recent = useRecentMissions(30);
-  const [tab, setTab] = useState<Tab>('collections');
+  const [tab, setTab] = useState<Tab>('memory');
 
   const { briefs, outputs } = useMemo(() => collectEntries(recent.missions), [recent.missions]);
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        icon="database"
-        title="Knowledge"
-        description="Where the crew's accumulated work will live: collections of documents, the sources behind them, and search across all of it."
-      />
+      <PageHeader icon="database" title={t.knowledge.title} description={t.knowledge.description} />
 
-      <Notice tone="preview" title="Preview built from your missions">
-        Documents and search work on the real results your missions have produced. Uploading files, connecting outside
-        sources and semantic search are not built yet.
+      <Notice tone="live" title={t.knowledge.notice.title}>
+        {t.knowledge.notice.body}
       </Notice>
 
-      <Segmented label="Knowledge sections" value={tab} onChange={setTab} options={TABS} />
+      <Segmented label={t.knowledge.sectionsAria} value={tab} onChange={setTab} options={TABS} />
 
-      {recent.error !== null && recent.missions.length === 0 ? (
+      {tab === 'memory' ? (
+        <div className="acc-fade">
+          <MemoryPanel />
+        </div>
+      ) : recent.error !== null && recent.missions.length === 0 ? (
         <ErrorBanner message={recent.error} onRetry={recent.refresh} />
       ) : recent.loading && recent.missions.length === 0 ? (
         <ListSkeleton rows={3} />
@@ -118,21 +124,21 @@ function Collections({ briefs, outputs, onOpenDocuments }: { briefs: Entry[]; ou
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        <Stat label="Final briefs" value={briefs.length} tone="ok" />
-        <Stat label="Agent outputs" value={outputs.length} tone="signal" />
-        <Stat label="Sources" value={0} />
+        <Stat label={t.knowledge.collections.finalBriefs} value={briefs.length} tone="ok" />
+        <Stat label={t.knowledge.collections.agentOutputs} value={outputs.length} tone="signal" />
+        <Stat label={t.knowledge.collections.sources} value={0} />
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <CollectionCard
           icon="file-text"
-          title="Mission briefs"
-          body="The integrated result of each completed mission: plan, next actions, risks and open items."
+          title={t.knowledge.collections.briefsTitle}
+          body={t.knowledge.collections.briefsBody}
           count={briefs.length}
           action={
             briefs.length > 0 ? (
               <Button variant="ghost" onClick={onOpenDocuments}>
-                View documents
+                {t.knowledge.collections.viewDocuments}
                 <Icon name="arrow-right" className="h-4 w-4" />
               </Button>
             ) : undefined
@@ -140,18 +146,14 @@ function Collections({ briefs, outputs, onOpenDocuments }: { briefs: Entry[]; ou
         />
         <CollectionCard
           icon="bot"
-          title="Agent outputs"
-          body="Each specialist's individual result from the latest run of every mission. Open a mission to read them in its pipeline."
+          title={t.knowledge.collections.outputsTitle}
+          body={t.knowledge.collections.outputsBody}
           count={outputs.length}
         />
       </div>
 
       {briefs.length === 0 && (
-        <EmptyState
-          icon="database"
-          title="Your collections are empty"
-          body="Collections fill themselves as missions complete. Launch one from the Dashboard and its brief will be filed here."
-        />
+        <EmptyState icon="database" title={t.knowledge.collections.empty.title} body={t.knowledge.collections.empty.body} />
       )}
     </div>
   );
@@ -178,9 +180,7 @@ function CollectionCard({
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="text-[0.95rem] font-semibold text-[var(--color-ink)]">{title}</h2>
-          <p className="tabular text-[0.72rem] text-[var(--color-ink-faint)]">
-            {count} item{count === 1 ? '' : 's'} · automatic
-          </p>
+          <p className="tabular text-[0.72rem] text-[var(--color-ink-faint)]">{t.knowledge.collections.count(count)}</p>
         </div>
       </div>
       <p className="mt-3 flex-1 text-[0.8rem] leading-relaxed text-[var(--color-ink-dim)]">{body}</p>
@@ -191,14 +191,10 @@ function CollectionCard({
 
 function Documents({ briefs }: { briefs: Entry[] }) {
   if (briefs.length === 0) {
-    return (
-      <EmptyState
-        icon="file-text"
-        title="No documents yet"
-        body="A document appears here when a mission finishes and the Integrator writes its final brief."
-      />
-    );
+    return <EmptyState icon="file-text" title={t.knowledge.documents.empty.title} body={t.knowledge.documents.empty.body} />;
   }
+
+  const number = new Intl.NumberFormat(LOCALE);
 
   return (
     <ul className="space-y-2">
@@ -215,7 +211,7 @@ function Documents({ briefs }: { briefs: Entry[] }) {
               </span>
               <span className="mt-0.5 line-clamp-2 text-[0.78rem] text-[var(--color-ink-dim)]">{excerpt(entry.text, 200)}</span>
               <span className="tabular mt-1 block text-[0.68rem] text-[var(--color-ink-faint)]">
-                {entry.origin} · {entry.text.length.toLocaleString()} characters · {absoluteTime(entry.at)}
+                {t.knowledge.documents.meta(entry.origin, number.format(entry.text.length), absoluteTime(entry.at))}
               </span>
             </span>
             <Icon name="chevron-right" className="mt-1 h-4 w-4 shrink-0 text-[var(--color-ink-faint)]" />
@@ -226,23 +222,12 @@ function Documents({ briefs }: { briefs: Entry[] }) {
   );
 }
 
-const PLANNED_SOURCES: { icon: IconName; name: string; body: string }[] = [
-  { icon: 'file-text', name: 'Uploaded files', body: 'PDFs, documents and notes you add yourself.' },
-  { icon: 'globe', name: 'Web pages', body: 'Pages fetched and saved by the Research engine.' },
-  { icon: 'folder', name: 'Cloud drives', body: 'Folders from a connected storage account.' },
-  { icon: 'database', name: 'Databases', body: 'Structured data the crew can query read-only.' },
-];
-
 function Sources() {
   return (
     <div className="space-y-4">
-      <EmptyState
-        icon="link"
-        title="No sources connected"
-        body="Sources are where knowledge comes from. None can be connected yet, so the crew works only from the mission you write."
-      />
+      <EmptyState icon="link" title={t.knowledge.sources.empty.title} body={t.knowledge.sources.empty.body} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {PLANNED_SOURCES.map((source) => (
+        {t.knowledge.sources.planned.map((source) => (
           <Panel key={source.name} as="article" className="flex items-start gap-3 p-4">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--color-tint)] text-[var(--color-ink-faint)] ring-1 ring-[var(--color-line)]">
               <Icon name={source.icon} className="h-5 w-5" />
@@ -250,7 +235,7 @@ function Sources() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-[0.9rem] font-medium text-[var(--color-ink)]">{source.name}</h3>
-                <Badge>Not connected</Badge>
+                <Badge>{t.knowledge.sources.notConnected}</Badge>
               </div>
               <p className="mt-1 text-[0.78rem] leading-relaxed text-[var(--color-ink-faint)]">{source.body}</p>
             </div>
@@ -290,29 +275,22 @@ function SearchPanel({ entries }: { entries: Entry[] }) {
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search your briefs and agent outputs"
-          aria-label="Search knowledge"
+          placeholder={t.knowledge.search.placeholder}
+          aria-label={t.knowledge.search.aria}
           className="min-h-[48px] w-full rounded-xl border border-[var(--color-edge-bright)] bg-[var(--color-field)] py-2 pl-10 pr-3 text-[var(--color-ink)] placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-signal)]/55 focus:outline-none focus:ring-2 focus:ring-[var(--color-signal)]/30"
         />
       </div>
 
-      <p className="text-[0.72rem] text-[var(--color-ink-faint)]">
-        Plain-text search across {entries.length} stored item{entries.length === 1 ? '' : 's'}. Semantic search arrives with
-        the knowledge index.
-      </p>
+      <p className="text-[0.72rem] text-[var(--color-ink-faint)]">{t.knowledge.search.hint(entries.length)}</p>
 
       {needle.length < MIN_QUERY ? (
         <EmptyState
           icon="search"
-          title="Search your knowledge"
-          body={
-            entries.length === 0
-              ? 'There is nothing to search yet. Complete a mission first.'
-              : `Type at least ${MIN_QUERY} characters to search the text of your final briefs and every agent's output.`
-          }
+          title={t.knowledge.search.prompt.title}
+          body={entries.length === 0 ? t.knowledge.search.prompt.nothing : t.knowledge.search.prompt.minChars(MIN_QUERY)}
         />
       ) : results.length === 0 ? (
-        <EmptyState icon="search" title="No results" body={`No stored text contains “${query.trim()}”.`} />
+        <EmptyState icon="search" title={t.knowledge.search.noResults.title} body={t.knowledge.search.noResults.body(query.trim())} />
       ) : (
         <ul className="space-y-2">
           {results.map(({ entry, matchAt }) => (
@@ -322,7 +300,7 @@ function SearchPanel({ entries }: { entries: Entry[] }) {
                 className="panel block px-4 py-3 transition hover:border-[var(--color-edge-bright)] hover:bg-[var(--color-surface-2)]/60"
               >
                 <span className="flex items-center gap-2">
-                  <Badge tone={entry.origin === 'Final brief' ? 'ok' : 'signal'}>{entry.origin}</Badge>
+                  <Badge tone={entry.kind === 'brief' ? 'ok' : 'signal'}>{entry.origin}</Badge>
                   <span className="truncate text-[0.86rem] font-medium text-[var(--color-ink)]">
                     {cleanPrompt(entry.missionTitle)}
                   </span>

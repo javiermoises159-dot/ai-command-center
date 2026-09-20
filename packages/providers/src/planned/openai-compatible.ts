@@ -18,11 +18,11 @@ import { PlannedProvider } from './planned-provider.ts';
  */
 export class OpenAICompatibleProvider extends PlannedProvider {
   readonly id: ProviderId = 'openai-compatible';
-  readonly label = 'OpenAI-compatible endpoint';
+  readonly label = 'Endpoint compatible con OpenAI';
   readonly requirement =
-    'It will need OPENAI_COMPATIBLE_BASE_URL (and usually OPENAI_COMPATIBLE_API_KEY) on the server.';
+    'Necesitará OPENAI_COMPATIBLE_BASE_URL (y normalmente OPENAI_COMPATIBLE_API_KEY) en el servidor.';
 
   protected override models(): readonly ProviderModel[] {
-    return [{ id: 'configured-at-runtime', label: 'Discovered from the endpoint' }];
+    return [{ id: 'configured-at-runtime', label: 'Detectado desde el endpoint' }];
   }
 }

@@ -207,5 +207,10 @@ export function serializeProviders(descriptors: readonly ProviderDescriptor[]): 
       contextWindow: m.contextWindow ?? null,
     })),
     note: d.note ?? null,
+    // Three different questions: is there an implementation, does it have its
+    // credentials, can it be called. Env variable NAMES only — never a value.
+    implemented: d.implemented ?? true,
+    configured: d.configured ?? d.availability === 'available',
+    requires: [...(d.requires ?? [])],
   }));
 }

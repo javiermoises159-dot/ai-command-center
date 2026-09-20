@@ -29,7 +29,7 @@ export interface AsyncState<T> {
 
 const IDLE_POLL_MS = 1200;
 
-function message(error: unknown): string {
+export function message(error: unknown): string {
   if (error instanceof ApiClientError) return error.message;
   if (error instanceof Error) return error.message;
   return 'Something went wrong.';
@@ -40,7 +40,7 @@ function message(error: unknown): string {
  * is still moving. `silent` refreshes never flip `loading`, so a polled update
  * does not make the UI flash a skeleton every second.
  */
-function usePolledResource<T>(
+export function usePolledResource<T>(
   fetcher: (signal: AbortSignal) => Promise<T>,
   shouldPoll: (data: T | null) => boolean,
   deps: unknown[],
@@ -148,6 +148,17 @@ export function useStats(active: boolean) {
   );
 }
 
+/**
+ * The catalog and provider list only decorate the screens (names, accents, the
+ * provider picker); a failure to load them leaves the lists empty but must not
+ * be silent, so it is reported to the console unless the request was aborted
+ * on purpose (the component went away).
+ */
+function warnUnlessAborted(controller: AbortController, what: string, error: unknown): void {
+  if (controller.signal.aborted) return;
+  console.warn(`No se pudo cargar ${what}.`, error);
+}
+
 /** The agent catalog never changes at runtime, so it is fetched once. */
 export function useAgentCatalog() {
   const [agents, setAgents] = useState<AgentDefinition[]>([]);
@@ -157,7 +168,7 @@ export function useAgentCatalog() {
     api
       .listAgents(controller.signal)
       .then((response) => setAgents(response.items))
-      .catch(() => undefined);
+      .catch((error: unknown) => warnUnlessAborted(controller, 'agent catalog', error));
     return () => controller.abort();
   }, []);
 
@@ -172,7 +183,7 @@ export function useProviders() {
     api
       .listProviders(controller.signal)
       .then((response) => setProviders(response.items))
-      .catch(() => undefined);
+      .catch((error: unknown) => warnUnlessAborted(controller, 'provider list', error));
     return () => controller.abort();
   }, []);
 

@@ -11,6 +11,7 @@ import { Markdown } from '../lib/markdown.tsx';
 import { agentMeta } from '../lib/agents-meta.ts';
 import { accentClass, cx, duration } from '../lib/format.ts';
 import type { AgentDefinition, AgentExecution, RunDetail } from '../lib/api.ts';
+import { t } from '../i18n/index.ts';
 import { Icon } from './icons.tsx';
 import { StatusChip, StatusDot } from './primitives.tsx';
 
@@ -35,7 +36,7 @@ export function AgentPipeline({
   }, [runningAgentId, userPinned]);
 
   return (
-    <ol className="relative space-y-2" aria-label="Agent pipeline">
+    <ol className="relative space-y-2" aria-label={t.missions.pipeline.ariaLabel}>
       {run.agents.map((agent, index) => (
         <AgentRow
           key={agent.id}
@@ -122,7 +123,7 @@ function AgentRow({
             >
               {agent.status === 'failed' && agent.error !== null
                 ? agent.error
-                : (definition?.role ?? 'Specialist agent')}
+                : (definition?.role ?? t.missions.pipeline.specialist)}
             </span>
           </span>
 
@@ -146,7 +147,7 @@ function AgentRow({
           <div className="acc-rise border-t border-[var(--color-edge)] px-3.5 py-3.5">
             {agent.error !== null ? (
               <div className="rounded-lg border border-rose-500/30 bg-rose-500/8 px-3 py-2.5 text-[0.85rem] text-rose-800 dark:border-rose-400/25 dark:text-rose-200">
-                <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-wider opacity-80">Failure</p>
+                <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-wider opacity-80">{t.missions.pipeline.failure}</p>
                 {agent.error}
               </div>
             ) : (
@@ -155,20 +156,20 @@ function AgentRow({
                 {agent.usage && (
                   <dl className="tabular mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-[var(--color-edge)] pt-3 text-[0.68rem] text-[var(--color-ink-faint)]">
                     <div className="flex gap-1">
-                      <dt>provider</dt>
+                      <dt>{t.missions.pipeline.provider}</dt>
                       <dd className="font-mono text-[var(--color-ink-dim)]">{agent.usage.provider}</dd>
                     </div>
                     <div className="flex gap-1">
-                      <dt>model</dt>
+                      <dt>{t.missions.pipeline.model}</dt>
                       <dd className="font-mono text-[var(--color-ink-dim)]">{agent.usage.model}</dd>
                     </div>
                     <div className="flex gap-1">
-                      <dt>tokens</dt>
+                      <dt>{t.missions.pipeline.tokens}</dt>
                       <dd className="font-mono text-[var(--color-ink-dim)]">{agent.usage.totalTokens}</dd>
                     </div>
                     <div className="flex gap-1">
-                      <dt>latency</dt>
-                      <dd className="font-mono text-[var(--color-ink-dim)]">{agent.usage.latencyMs}ms</dd>
+                      <dt>{t.missions.pipeline.latency}</dt>
+                      <dd className="font-mono text-[var(--color-ink-dim)]">{t.missions.pipeline.latencyValue(agent.usage.latencyMs)}</dd>
                     </div>
                   </dl>
                 )}
@@ -177,8 +178,8 @@ function AgentRow({
 
             <details className="group mt-3">
               <summary className="cursor-pointer list-none text-[0.7rem] uppercase tracking-wider text-[var(--color-ink-faint)] hover:text-[var(--color-ink-dim)]">
-                <span className="group-open:hidden">Show assignment</span>
-                <span className="hidden group-open:inline">Hide assignment</span>
+                <span className="group-open:hidden">{t.missions.pipeline.showAssignment}</span>
+                <span className="hidden group-open:inline">{t.missions.pipeline.hideAssignment}</span>
               </summary>
               <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg border border-[var(--color-edge)] bg-[var(--color-tint)] p-2.5 font-mono text-[0.7rem] leading-relaxed text-[var(--color-ink-dim)]">
                 {agent.task}

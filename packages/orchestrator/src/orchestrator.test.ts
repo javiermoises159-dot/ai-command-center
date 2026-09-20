@@ -152,16 +152,16 @@ describe('mission pipeline — happy path', () => {
 
     // QA names each specialist it reviewed; the Integrator reproduces their sections.
     assert.match(qa?.result ?? '', /Marketing/);
-    assert.match(qa?.result ?? '', /Finance/);
-    assert.match(integrator?.result ?? '', /### Strategy/);
-    assert.match(integrator?.result ?? '', /### Quality Assurance|QA review/);
+    assert.match(qa?.result ?? '', /Finanzas/);
+    assert.match(integrator?.result ?? '', /### Estrategia/);
+    assert.match(integrator?.result ?? '', /revisión de calidad/);
   });
 
   it('stores a readable assignment on every agent row', async () => {
     const created = await h.service.create({ prompt: 'Launch an online cookie store in Italy' });
     for (const agent of created.mission.runs[0]?.agents ?? []) {
-      assert.match(agent.task, /^MISSION: Launch an online cookie store in Italy/);
-      assert.match(agent.task, /EXPECTED DELIVERABLE:/);
+      assert.match(agent.task, /^MISIÓN: Launch an online cookie store in Italy/);
+      assert.match(agent.task, /ENTREGABLE ESPERADO:/);
     }
   });
 });
@@ -185,7 +185,7 @@ describe('mission pipeline — worker failure is survivable', () => {
     // The run is failed, but the partial deliverable is kept rather than discarded.
     assert.equal(run.run.status, 'failed');
     assert.equal(detail.mission.status, 'failed');
-    assert.match(run.run.error ?? '', /1 agent failed: Marketing/);
+    assert.match(run.run.error ?? '', /Falló 1 agente: Marketing/);
     assert.ok(detail.mission.finalResult, 'the integrator brief should still be stored');
   });
 
@@ -197,10 +197,10 @@ describe('mission pipeline — worker failure is survivable', () => {
     const qa = agents.find((a) => a.agentId === 'qa');
     const integrator = agents.find((a) => a.agentId === 'integrator');
 
-    assert.match(qa?.result ?? '', /did not produce output/);
-    assert.match(qa?.result ?? '', /No-go/);
-    assert.match(integrator?.result ?? '', /Gaps carried forward/);
-    assert.match(integrator?.result ?? '', /Marketing did not run/);
+    assert.match(qa?.result ?? '', /no produjo resultado/);
+    assert.match(qa?.result ?? '', /No seguir adelante/);
+    assert.match(integrator?.result ?? '', /Lagunas que se arrastran/);
+    assert.match(integrator?.result ?? '', /Marketing no se ejecutó/);
   });
 
   it('aborts the run instead when continueOnWorkerFailure is off', async () => {
@@ -453,7 +453,7 @@ describe('crash recovery', () => {
     const detail = await service.get(missionId);
     assert.equal(detail.mission.status, 'failed');
     assert.equal(detail.runs[0]?.run.status, 'failed');
-    assert.match(detail.runs[0]?.run.error ?? '', /server restarted/i);
+    assert.match(detail.runs[0]?.run.error ?? '', /se reinició/i);
     assert.equal(detail.runs[0]?.agents.filter((a) => a.status === 'pending').length, 0);
   });
 
@@ -495,7 +495,7 @@ describe('crash recovery', () => {
     assert.equal(settled.filter((a) => a.status === 'running').length, 0, 'no agent may stay running in a failed run');
     assert.equal(settled[0]?.status, 'completed', 'finished work is preserved');
     assert.equal(settled[1]?.status, 'failed', 'the interrupted agent is failed');
-    assert.match(settled[1]?.error ?? '', /restarted/i);
+    assert.match(settled[1]?.error ?? '', /se reinició/i);
     assert.equal(settled.slice(2).every((a) => a.status === 'skipped'), true, 'agents that never started are skipped');
   });
 

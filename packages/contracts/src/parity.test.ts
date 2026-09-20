@@ -113,9 +113,26 @@ describe('OpenAPI document', () => {
     assert.deepEqual(Object.keys(doc.paths).sort(), [
       '/api/agents',
       '/api/health',
+      '/api/madre/activity',
+      '/api/madre/agents',
+      '/api/madre/approvals',
+      '/api/madre/approvals/{id}/approve',
+      '/api/madre/approvals/{id}/deny',
+      '/api/madre/budget',
+      '/api/madre/compile',
+      '/api/madre/memory',
+      '/api/madre/memory/{id}',
+      '/api/madre/overview',
+      '/api/madre/permissions',
+      '/api/madre/providers',
+      '/api/madre/providers/health',
+      '/api/madre/tools',
       '/api/missions',
       '/api/missions/{id}',
+      '/api/missions/{id}/cancel',
+      '/api/missions/{id}/madre',
       '/api/missions/{id}/run',
+      '/api/missions/{id}/trace',
       '/api/providers',
       '/api/stats',
     ]);
@@ -132,5 +149,25 @@ describe('OpenAPI document', () => {
     for (const refName of refs) {
       assert.ok(refName !== undefined && names.has(refName), `dangling $ref: ${refName}`);
     }
+  });
+});
+
+describe('OpenAPI vs the server routes', () => {
+  it('every documented MADRE path is a route the server registers, and vice versa', async () => {
+    const { madreRoutes } = await import('../../../apps/server/src/http/madre-routes.ts');
+    const doc = buildOpenApiDocument('0.1.0') as any;
+    const documented = new Set<string>();
+    for (const [path, ops] of Object.entries<any>(doc.paths)) {
+      if (!path.startsWith('/api/madre') && !/^\/api\/missions\/\{id\}\/(madre|cancel|trace)$/.test(path)) continue;
+      for (const method of Object.keys(ops)) documented.add(`${method.toUpperCase()} ${path.replace(/\{(\w+)\}/g, ':$1')}`);
+    }
+    const registered = new Set((madreRoutes({} as never) as { method: string; pattern: string }[]).map((r) => `${r.method} ${r.pattern}`));
+    assert.deepEqual([...registered].sort(), [...documented].sort());
+  });
+
+  it('accepts a mode on mission requests, matching the domain', () => {
+    assert.equal(createMissionRequestSchema.safeParse({ prompt: 'Launch an online cookie store', mode: 'madre' }).success, true);
+    assert.equal(createMissionRequestSchema.safeParse({ prompt: 'Launch an online cookie store', mode: 'turbo' }).success, false);
+    assert.throws(() => parseCreateMissionInput({ prompt: 'Launch an online cookie store', mode: 'turbo' }), ValidationError);
   });
 });

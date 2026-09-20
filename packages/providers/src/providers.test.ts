@@ -5,7 +5,7 @@ import { DomainError, ProviderNotConfiguredError, type ProviderTask } from '@acc
 import { MockProvider } from './mock/mock-provider.ts';
 import { SIMULATION_NOTICE } from './mock/generators.ts';
 import { createProviderRegistry, ProviderRegistry } from './index.ts';
-import { OpenAIProvider } from './planned/openai.ts';
+import { OpenAICompatibleProvider } from './planned/openai-compatible.ts';
 import { createRng, hashString } from './mock/rng.ts';
 
 const noSleep = () => Promise.resolve();
@@ -93,7 +93,7 @@ describe('MockProvider', () => {
     const controller = new AbortController();
     const promise = slow.execute(task(), controller.signal);
     controller.abort();
-    await assert.rejects(promise, /cancelled/i);
+    await assert.rejects(promise, /cancelada/i);
   });
 
   it('skips simulated latency on the fast model', async () => {
@@ -106,17 +106,17 @@ describe('MockProvider', () => {
 
 describe('planned providers', () => {
   it('reject execution with an explicit not-implemented error', async () => {
-    await assert.rejects(new OpenAIProvider().execute(task()), (error: unknown) => {
+    await assert.rejects(new OpenAICompatibleProvider().execute(task()), (error: unknown) => {
       assert.ok(error instanceof ProviderNotConfiguredError);
       assert.equal(error.status, 503);
-      assert.match(error.message, /stub, not an implementation/);
+      assert.match(error.message, /esbozo declarado, no una implementación/);
       return true;
     });
   });
 
   it('never silently fall back to the mock', async () => {
     const registry = createProviderRegistry();
-    assert.throws(() => registry.resolve('anthropic'), /not implemented/i);
+    assert.throws(() => registry.resolve('openai-compatible'), /not implemented/i);
   });
 });
 
@@ -132,10 +132,13 @@ describe('ProviderRegistry', () => {
     const described = registry.describe();
     assert.deepEqual(
       described.map((d) => d.id).sort(),
-      ['anthropic', 'gemini', 'mock', 'openai', 'openai-compatible'],
+      ['anthropic', 'gemini', 'mock', 'ollama', 'openai', 'openai-compatible'],
     );
     assert.equal(described.filter((d) => d.availability === 'available').length, 1);
-    assert.equal(described.filter((d) => d.availability === 'planned').length, 4);
+    // Ollama (no server) and the OpenAI-compatible stub are planned; the three
+    // real vendors are implemented but unconfigured — a different state.
+    assert.equal(described.filter((d) => d.availability === 'planned').length, 2);
+    assert.equal(described.filter((d) => d.availability === 'unconfigured').length, 3);
   });
 
   it('resolves the default provider and its first model', () => {

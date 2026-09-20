@@ -1,7 +1,9 @@
 {
   "name": "AI Command Center",
   "short_name": "Command Center",
-  "description": "Multi-agent mission orchestration.",
+  "description": "Orquestación multiagente de misiones.",
+  "lang": "es",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

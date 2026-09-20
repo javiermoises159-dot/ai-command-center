@@ -6,9 +6,11 @@
 
 import {
   DomainError,
+  ProviderError,
   describeProvider,
   type AIProvider,
   type ProviderDescriptor,
+  type ProviderHealthReport,
   type ProviderId,
 } from '@acc/domain';
 
@@ -36,7 +38,7 @@ export class ProviderRegistry {
     if (!provider) {
       throw new DomainError('provider_not_configured', `Unknown provider "${id}".`, {
         status: 400,
-        publicMessage: `Unknown provider "${id}". Available: ${this.availableIds().join(', ')}.`,
+        publicMessage: `Proveedor desconocido «${id}». Disponibles: ${this.availableIds().join(', ')}.`,
       });
     }
     return provider;
@@ -46,7 +48,7 @@ export class ProviderRegistry {
     if (this.defaultId === null) {
       throw new DomainError('provider_not_configured', 'No available provider is registered.', {
         status: 503,
-        publicMessage: 'No AI provider is available on this server.',
+        publicMessage: 'No hay ningún proveedor de IA disponible en este servidor.',
       });
     }
     return this.get(this.defaultId);
@@ -66,6 +68,17 @@ export class ProviderRegistry {
   }
 
   /**
+   * Ask an adapter whether it is reachable right now, without running a task.
+   * Returns null for an adapter that offers no probe (it is then reported as
+   * unknown, never as healthy).
+   */
+  probe(id: string, signal?: AbortSignal): Promise<ProviderHealthReport | null> {
+    const provider = this.providers.get(id as ProviderId);
+    if (provider?.health === undefined) return Promise.resolve(null);
+    return provider.health(signal);
+  }
+
+  /**
    * Resolve a requested provider/model pair, falling back to the default and to
    * the provider's first model. Throws if the requested model is not offered,
    * rather than silently substituting one.
@@ -73,10 +86,18 @@ export class ProviderRegistry {
   resolve(providerId?: string, model?: string): { provider: AIProvider; model: string } {
     const provider = providerId !== undefined ? this.get(providerId) : this.getDefault();
 
+    if (provider.availability === 'unconfigured') {
+      // Implemented, but without its credentials or model. Say exactly what is
+      // missing; never hand back a stand-in.
+      throw new ProviderError('PROVIDER_UNCONFIGURED', {
+        provider: provider.id,
+        detail: provider.configuration?.().reason ?? `«${provider.label}» no está configurado.`,
+      });
+    }
     if (provider.availability !== 'available') {
       throw new DomainError('provider_not_configured', `Provider "${provider.id}" is not implemented yet.`, {
         status: 503,
-        publicMessage: `"${provider.label}" is declared but not implemented in this build. Use one of: ${this.availableIds().join(', ')}.`,
+        publicMessage: `«${provider.label}» está declarado pero aún no está implementado en esta versión. Usa uno de estos: ${this.availableIds().join(', ')}.`,
       });
     }
 
@@ -85,6 +106,7 @@ export class ProviderRegistry {
     if (!fallback) {
       throw new DomainError('provider_not_configured', `Provider "${provider.id}" exposes no models.`, {
         status: 503,
+        publicMessage: `El proveedor «${provider.label}» no ofrece ningún modelo.`,
       });
     }
 
@@ -93,7 +115,7 @@ export class ProviderRegistry {
     if (!models.some((m) => m.id === model)) {
       throw new DomainError('provider_not_configured', `Model "${model}" is not offered by "${provider.id}".`, {
         status: 400,
-        publicMessage: `Model "${model}" is not available. Options: ${models.map((m) => m.id).join(', ')}.`,
+        publicMessage: `El modelo «${model}» no está disponible. Opciones: ${models.map((m) => m.id).join(', ')}.`,
       });
     }
 

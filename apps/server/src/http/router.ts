@@ -13,9 +13,11 @@ import {
   toDomainError,
   type Logger,
 } from '@acc/domain';
+import type { MadreService } from '@acc/madre';
 import type { MissionService } from '@acc/orchestrator';
 import type { ProviderRegistry } from '@acc/providers';
 
+import { madreRoutes } from './madre-routes.ts';
 import { json, matchPath, type HttpRequest, type HttpResponse, type Route } from './types.ts';
 import {
   serializeAgentCatalog,
@@ -30,6 +32,8 @@ export interface RouterDeps {
   missions: MissionService;
   providers: ProviderRegistry;
   logger: Logger;
+  /** The MADRE core. When absent, the /api/madre routes are not registered. */
+  madre?: MadreService | undefined;
   /** Reported by /api/health so a deploy can be identified. */
   version: string;
 }
@@ -127,6 +131,8 @@ export function createRouter(deps: RouterDeps): Router {
         return json(202, { run: serializeRun(run) });
       },
     },
+
+    ...(deps.madre !== undefined ? madreRoutes(deps.madre) : []),
   ];
 
   async function handle(request: HttpRequest): Promise<HttpResponse> {

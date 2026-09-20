@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { AgentPipeline } from '../components/AgentPipeline.tsx';
 import { Icon } from '../components/icons.tsx';
@@ -9,6 +9,7 @@ import {
   Panel,
   ProgressBar,
   SectionTitle,
+  Segmented,
   Skeleton,
   StatusChip,
 } from '../components/primitives.tsx';
@@ -17,11 +18,27 @@ import { absoluteTime, cleanPrompt, cx, duration, extractDirectives, relativeTim
 import { api, ApiClientError } from '../lib/api.ts';
 import { href, useRouter } from '../lib/router.tsx';
 import { useAgentCatalog, useMission } from '../hooks/useApi.ts';
+import { useMissionMadre } from '../hooks/useMadre.ts';
+import { RunPanel } from '../components/madre/RunPanel.tsx';
+import { t } from '../i18n/index.ts';
 
 export function MissionPage({ id }: { id: string }) {
   const { navigate } = useRouter();
   const mission = useMission(id);
   const catalog = useAgentCatalog();
+  const madre = useMissionMadre(id, mission.data === null || mission.data.status === 'pending' || mission.data.status === 'running');
+  const [view, setView] = useState<'result' | 'plan'>('result');
+  const pendingCount = madre.data?.approvals.filter((a) => a.status === 'pending').length ?? 0;
+  const showedPending = useRef(false);
+
+  // When the crew needs something from the person, take them to it once.
+  useEffect(() => {
+    if (pendingCount > 0 && !showedPending.current) {
+      showedPending.current = true;
+      setView('plan');
+    }
+    if (pendingCount === 0) showedPending.current = false;
+  }, [pendingCount]);
 
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [rerunning, setRerunning] = useState(false);
@@ -30,7 +47,7 @@ export function MissionPage({ id }: { id: string }) {
 
   if (mission.loading && mission.data === null) {
     return (
-      <div className="space-y-5" role="status" aria-label="Loading mission">
+      <div className="space-y-5" role="status" aria-label={t.missions.detail.loading}>
         <Skeleton className="h-4 w-24" />
         <Panel className="space-y-3 p-4">
           <Skeleton className="h-5 w-3/4" />
@@ -45,9 +62,9 @@ export function MissionPage({ id }: { id: string }) {
   if (mission.data === null) {
     return (
       <div className="space-y-4">
-        <ErrorBanner message={mission.error ?? 'Mission not found.'} onRetry={mission.refresh} />
+        <ErrorBanner message={mission.error ?? t.missions.detail.notFound} onRetry={mission.refresh} />
         <Button variant="ghost" onClick={() => navigate({ name: 'missions' })}>
-          Back to missions
+          {t.missions.detail.backToList}
         </Button>
       </div>
     );
@@ -73,7 +90,7 @@ export function MissionPage({ id }: { id: string }) {
       mission.refresh();
       setSelectedRunId(null);
     } catch (error) {
-      setActionError(error instanceof ApiClientError ? error.message : 'Could not start a new run.');
+      setActionError(error instanceof ApiClientError ? error.message : t.missions.detail.runFailed);
     } finally {
       setRerunning(false);
     }
@@ -86,7 +103,7 @@ export function MissionPage({ id }: { id: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
-      setActionError('Could not copy to the clipboard.');
+      setActionError(t.missions.detail.copyFailed);
     }
   }
 
@@ -97,7 +114,7 @@ export function MissionPage({ id }: { id: string }) {
         className="inline-flex items-center gap-1 text-[0.78rem] text-[var(--color-ink-faint)] hover:text-[var(--color-ink-dim)]"
       >
         <Icon name="chevron-left" className="h-4 w-4" />
-        All missions
+        {t.missions.detail.allMissions}
       </a>
 
       {/* ------------------------------------------------------- Mission header */}
@@ -111,7 +128,7 @@ export function MissionPage({ id }: { id: string }) {
 
         <div className="mt-3">
           <p className="mb-1 text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">
-            Objective
+            {t.missions.detail.objective}
           </p>
           <p className="whitespace-pre-wrap text-[0.88rem] leading-relaxed text-[var(--color-ink-dim)]">
             {cleanPrompt(detail.prompt)}
@@ -120,7 +137,7 @@ export function MissionPage({ id }: { id: string }) {
 
         {directives.length > 0 && (
           <p className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[0.7rem] text-[var(--color-ink-faint)]">
-            <span>Test directives active:</span>
+            <span>{t.missions.detail.directives}</span>
             {directives.map((directive) => (
               <code
                 key={directive}
@@ -136,13 +153,13 @@ export function MissionPage({ id }: { id: string }) {
           <div className="mt-4">
             <ProgressBar value={activeRun.progress} tone={tone} />
             <div className="tabular mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.72rem] text-[var(--color-ink-faint)]">
-              <span className="font-medium text-[var(--color-ink-dim)]">{Math.round(activeRun.progress * 100)}% complete</span>
-              <span>
-                {doneCount}/{activeRun.agents.length} agents done
-              </span>
-              {failedCount > 0 && <span className="text-[var(--color-bad)]">{failedCount} failed</span>}
+              <span className="font-medium text-[var(--color-ink-dim)]">{t.missions.detail.percentComplete(Math.round(activeRun.progress * 100))}</span>
+              <span>{t.missions.detail.agentsDone(doneCount, activeRun.agents.length)}</span>
+              {failedCount > 0 && (
+                <span className="text-[var(--color-bad)]">{t.missions.detail.failedAgents(failedCount)}</span>
+              )}
               <span className="ml-auto" title={absoluteTime(detail.createdAt)}>
-                created {relativeTime(detail.createdAt)}
+                {t.missions.detail.created(relativeTime(detail.createdAt))}
               </span>
             </div>
           </div>
@@ -151,12 +168,12 @@ export function MissionPage({ id }: { id: string }) {
         <div className="mt-4 flex flex-wrap gap-2">
           <Button onClick={rerun} busy={rerunning} disabled={busy} variant={busy ? 'ghost' : 'primary'} className="flex-1 sm:flex-none">
             {!rerunning && <Icon name={busy ? 'clock' : 'refresh'} className="h-4 w-4" />}
-            {busy ? 'Run in progress…' : 'Run again'}
+            {busy ? t.missions.detail.runInProgress : t.missions.detail.runAgain}
           </Button>
           {activeRun?.finalResult != null && (
             <Button variant="ghost" onClick={copyResult} className="flex-1 sm:flex-none">
               <Icon name={copied ? 'check' : 'copy'} className="h-4 w-4" />
-              {copied ? 'Copied' : 'Copy result'}
+              {copied ? t.missions.detail.copied : t.missions.detail.copyResult}
             </Button>
           )}
         </div>
@@ -172,13 +189,13 @@ export function MissionPage({ id }: { id: string }) {
       </Panel>
 
       {mission.error !== null && (
-        <ErrorBanner message={`Live updates interrupted: ${mission.error}`} onRetry={mission.refresh} />
+        <ErrorBanner message={t.missions.detail.liveInterrupted(mission.error)} onRetry={mission.refresh} />
       )}
 
       {/* --------------------------------------------------------- Run selector */}
       {runs.length > 1 && (
         <section>
-          <SectionTitle>Run history</SectionTitle>
+          <SectionTitle>{t.missions.detail.runHistory}</SectionTitle>
           <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
             <div className="flex w-max gap-1.5 sm:w-auto sm:flex-wrap">
               {runs.map((run) => (
@@ -194,9 +211,9 @@ export function MissionPage({ id }: { id: string }) {
                       : 'bg-[var(--color-tint)] ring-1 ring-[var(--color-line)] hover:bg-[var(--color-tint-strong)]',
                   )}
                 >
-                  <span className="tabular block text-[0.78rem] font-medium text-[var(--color-ink)]">Run #{run.attempt}</span>
+                  <span className="tabular block text-[0.78rem] font-medium text-[var(--color-ink)]">{t.missions.detail.runNumber(run.attempt)}</span>
                   <span className="block text-[0.64rem] uppercase tracking-wider text-[var(--color-ink-faint)]">
-                    {run.status}
+                    {t.missions.detail.runStatus[run.status] ?? run.status}
                   </span>
                 </button>
               ))}
@@ -205,7 +222,29 @@ export function MissionPage({ id }: { id: string }) {
         </section>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
+      {madre.data?.runId != null && (
+        <Segmented
+          label={t.missions.detail.viewAria}
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'result', label: t.missions.detail.viewResult },
+            {
+              value: 'plan',
+              label: t.missions.detail.viewPlan,
+              count: pendingCount || undefined,
+            },
+          ]}
+        />
+      )}
+
+      {view === 'plan' && madre.data?.runId != null && (
+        <div className="acc-fade">
+          <RunPanel missionId={id} madre={madre} onChanged={mission.refresh} />
+        </div>
+      )}
+
+      <div className={cx('grid grid-cols-1 items-start gap-5 xl:grid-cols-2', view === 'plan' && madre.data?.runId != null && 'hidden')}>
         {/* ------------------------------------------------------------ Pipeline */}
         {activeRun && (
           <section>
@@ -216,7 +255,7 @@ export function MissionPage({ id }: { id: string }) {
                 </span>
               }
             >
-              {isLatestRun ? 'Current run' : 'Run'} · #{activeRun.attempt} · {activeRun.agents.length} agents
+              {t.missions.detail.runTitle(isLatestRun, activeRun.attempt, activeRun.agents.length)}
             </SectionTitle>
             <AgentPipeline run={activeRun} catalog={catalog} />
 
@@ -231,19 +270,19 @@ export function MissionPage({ id }: { id: string }) {
 
             <dl className="tabular mt-3 flex flex-wrap gap-x-4 gap-y-1 px-1 text-[0.7rem] text-[var(--color-ink-faint)]">
               <div className="flex gap-1">
-                <dt>started</dt>
+                <dt>{t.missions.detail.startedAt}</dt>
                 <dd className="text-[var(--color-ink-dim)]">{absoluteTime(activeRun.startedAt)}</dd>
               </div>
               {activeRun.startedAt !== null && activeRun.completedAt !== null && (
                 <div className="flex gap-1">
-                  <dt>took</dt>
+                  <dt>{t.missions.detail.tookLabel}</dt>
                   <dd className="text-[var(--color-ink-dim)]">
                     {duration(new Date(activeRun.completedAt).getTime() - new Date(activeRun.startedAt).getTime())}
                   </dd>
                 </div>
               )}
               <div className="flex gap-1">
-                <dt>tokens</dt>
+                <dt>{t.missions.detail.tokens}</dt>
                 <dd className="text-[var(--color-ink-dim)]">{tokens}</dd>
               </div>
             </dl>
@@ -254,12 +293,11 @@ export function MissionPage({ id }: { id: string }) {
         <div className="space-y-5">
           {activeRun?.finalResult != null && (
             <section>
-              <SectionTitle>{isLatestRun ? 'Final result' : `Result of run #${activeRun.attempt}`}</SectionTitle>
+              <SectionTitle>{isLatestRun ? t.missions.detail.finalResult : t.missions.detail.resultOfRun(activeRun.attempt)}</SectionTitle>
               <Panel className="border-[var(--color-signal)]/30 p-4 sm:p-5">
                 {failedCount > 0 && (
                   <p className="mb-3 rounded-lg border border-amber-500/35 bg-amber-500/8 px-3 py-2 text-[0.8rem] text-amber-900 dark:border-amber-400/25 dark:text-amber-200">
-                    This brief is incomplete: {failedCount} agent{failedCount === 1 ? '' : 's'} failed, so the Integrator
-                    worked without their input.
+                    {t.missions.detail.incompleteBrief(failedCount)}
                   </p>
                 )}
                 <Markdown source={activeRun.finalResult} />
@@ -270,16 +308,16 @@ export function MissionPage({ id }: { id: string }) {
           {activeRun?.finalResult == null && activeRun?.status === 'failed' && (
             <Panel className="border-rose-500/30 px-4 py-6 text-center">
               <p className="text-sm text-[var(--color-ink-dim)]">
-                No final result: the run stopped before the Integrator could produce one.
+                {t.missions.detail.noFinalResult}
               </p>
             </Panel>
           )}
 
           {activeRun?.finalResult == null && busy && (
             <Panel className="px-4 py-8 text-center">
-              <p className="text-sm font-medium text-[var(--color-ink)]">The final brief will appear here</p>
+              <p className="text-sm font-medium text-[var(--color-ink)]">{t.missions.detail.finalPendingTitle}</p>
               <p className="mx-auto mt-1 max-w-xs text-[0.8rem] text-[var(--color-ink-faint)]">
-                The Integrator runs last, once every specialist and the QA review have reported.
+                {t.missions.detail.finalPendingBody}
               </p>
             </Panel>
           )}

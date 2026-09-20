@@ -4,10 +4,12 @@ export {
   missions,
   missionRuns,
   missionAgents,
+  madreDocuments,
   missionsRelations,
   missionRunsRelations,
   missionAgentsRelations,
   type MissionRow,
   type MissionRunRow,
   type MissionAgentRow,
+  type MadreDocumentRow,
 } from './schema.ts';

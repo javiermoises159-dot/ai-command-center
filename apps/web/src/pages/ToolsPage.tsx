@@ -1,74 +1,65 @@
 import { useState } from 'react';
 
+import type { MadreTool } from '@acc/contracts';
+
 import { Icon } from '../components/icons.tsx';
-import { Badge, EmptyState, IconTile, Notice, PageHeader, Panel, Segmented } from '../components/primitives.tsx';
-import { cx } from '../lib/format.ts';
-import {
-  STATUS_LABELS,
-  TOOLS,
-  TOOL_CATEGORIES,
-  countByStatus,
-  type ToolCategory,
-  type ToolEntry,
-  type ToolStatus,
-} from '../lib/tools-catalog.ts';
+import { Badge, EmptyState, ErrorBanner, ListSkeleton, Notice, PageHeader, Panel, Segmented } from '../components/primitives.tsx';
+import { useMadreTools } from '../hooks/useMadre.ts';
+import { TOOL_STATUS_LABELS, titleCase, toolTone } from '../lib/madre.ts';
+import { t } from '../i18n/index.ts';
 
-const STATUS_TONE: Record<ToolStatus, 'ok' | 'warn' | 'neutral'> = {
-  available: 'ok',
-  mock: 'warn',
-  not_connected: 'neutral',
-};
+/** Spanish name for a category code; falls back to the raw code made readable. */
+function categoryLabel(category: string): string {
+  return t.tools.category[category] ?? titleCase(category);
+}
 
-const STATUS_ACCENT: Record<ToolStatus, string> = {
-  available: 'emerald',
-  mock: 'amber',
-  not_connected: 'cyan',
-};
+type StatusFilter = 'all' | MadreTool['status'];
 
 export function ToolsPage() {
-  const [category, setCategory] = useState<ToolCategory | 'all'>('all');
-  const [status, setStatus] = useState<ToolStatus | 'all'>('all');
+  const tools = useMadreTools();
+  const [category, setCategory] = useState<string>('all');
+  const [status, setStatus] = useState<StatusFilter>('all');
 
-  const counts = countByStatus();
-  const visible = TOOLS.filter(
-    (tool) => (category === 'all' || tool.category === category) && (status === 'all' || tool.status === status),
-  );
+  if (tools.data === null) {
+    return (
+      <div className="space-y-5">
+        <Header />
+        {tools.error !== null ? <ErrorBanner message={tools.error} onRetry={tools.refresh} /> : <ListSkeleton rows={4} />}
+      </div>
+    );
+  }
 
-  const categoryOptions = [
-    { value: 'all' as const, label: 'All', count: TOOLS.length },
-    ...TOOL_CATEGORIES.map((c) => ({ value: c, label: c, count: TOOLS.filter((t) => t.category === c).length })),
-  ];
-  const statusOptions = [
-    { value: 'all' as const, label: 'Any status' },
-    { value: 'available' as const, label: 'Available', count: counts.available },
-    { value: 'mock' as const, label: 'Mock', count: counts.mock },
-    { value: 'not_connected' as const, label: 'Not connected', count: counts.not_connected },
-  ];
+  const all = tools.data.items;
+  const categories = [...new Set(all.map((tool) => tool.category))];
+  const statuses = (Object.keys(TOOL_STATUS_LABELS) as MadreTool['status'][]).filter((s) => all.some((tool) => tool.status === s));
+  const visible = all.filter((tool) => (category === 'all' || tool.category === category) && (status === 'all' || tool.status === status));
+  const usable = all.filter((tool) => tool.status === 'AVAILABLE' || tool.status === 'CONNECTED').length;
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        icon="wrench"
-        title="Tools"
-        description="The catalog of capabilities agents will be able to use. Each card says plainly whether it works today, is simulated, or is not built yet."
-      />
+      <Header />
 
-      <Notice tone="preview" title="No external tools are connected yet">
-        This screen is a roadmap. Only the mission orchestrator is real; text generation is simulated; everything else is
-        waiting to be built. Nothing here can send, publish or spend anything.
+      <Notice tone="live" title={t.tools.notice.title}>
+        {t.tools.notice.body(usable, all.length)}
       </Notice>
 
       <div className="space-y-3">
-        <Segmented label="Filter tools by category" value={category} onChange={setCategory} options={categoryOptions} />
-        <Segmented label="Filter tools by status" value={status} onChange={setStatus} options={statusOptions} />
+        <Segmented
+          label={t.tools.filters.categoryAria}
+          value={category}
+          onChange={setCategory}
+          options={[{ value: 'all', label: t.tools.filters.all, count: all.length }, ...categories.map((c) => ({ value: c, label: categoryLabel(c), count: all.filter((tool) => tool.category === c).length }))]}
+        />
+        <Segmented
+          label={t.tools.filters.statusAria}
+          value={status}
+          onChange={setStatus}
+          options={[{ value: 'all' as const, label: t.tools.filters.anyStatus }, ...statuses.map((s) => ({ value: s, label: TOOL_STATUS_LABELS[s], count: all.filter((tool) => tool.status === s).length }))]}
+        />
       </div>
 
       {visible.length === 0 ? (
-        <EmptyState
-          icon="wrench"
-          title="No tools match"
-          body="No tool has this combination of category and status. Try widening one of the filters."
-        />
+        <EmptyState icon="wrench" title={t.tools.empty.title} body={t.tools.empty.body} />
       ) : (
         <div className="acc-stagger grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {visible.map((tool) => (
@@ -80,26 +71,50 @@ export function ToolsPage() {
   );
 }
 
-function ToolCard({ tool }: { tool: ToolEntry }) {
+function Header() {
   return (
-    <Panel as="article" className={cx('flex flex-col p-4', tool.status === 'not_connected' && 'opacity-90')}>
+    <PageHeader
+      icon="wrench"
+      title={t.tools.title}
+      description={t.tools.description}
+    />
+  );
+}
+
+function ToolCard({ tool }: { tool: MadreTool }) {
+  const usable = tool.status === 'AVAILABLE' || tool.status === 'CONNECTED';
+  return (
+    <Panel as="article" className="flex flex-col p-4">
       <div className="flex items-start gap-3">
-        <IconTile icon={tool.icon} accent={STATUS_ACCENT[tool.status]} />
         <div className="min-w-0 flex-1">
           <h2 className="text-[0.95rem] font-semibold text-[var(--color-ink)]">{tool.name}</h2>
-          <p className="text-[0.7rem] uppercase tracking-wider text-[var(--color-ink-faint)]">{tool.category}</p>
+          <p className="text-[0.7rem] uppercase tracking-wider text-[var(--color-ink-faint)]">
+            {categoryLabel(tool.category)} · {t.tools.locality[tool.locality] ?? tool.locality}
+          </p>
         </div>
-        <Badge tone={STATUS_TONE[tool.status]}>{STATUS_LABELS[tool.status]}</Badge>
+        <Badge tone={toolTone(tool.status)}>{TOOL_STATUS_LABELS[tool.status]}</Badge>
       </div>
 
-      <p className="mt-3 flex-1 text-[0.8rem] leading-relaxed text-[var(--color-ink-dim)]">{tool.description}</p>
+      <p className="mt-3 text-[0.8rem] leading-relaxed text-[var(--color-ink-dim)]">{tool.description}</p>
+      <p className="mt-2 flex-1 text-[0.76rem] leading-relaxed text-[var(--color-ink-faint)]">{tool.statusDetail}</p>
 
-      {tool.requires !== null && (
-        <p className="mt-3 flex items-start gap-2 border-t border-[var(--color-edge)] pt-3 text-[0.74rem] leading-relaxed text-[var(--color-ink-faint)]">
+      <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[var(--color-edge)] pt-3">
+        {tool.permissions.map((p) => (
+          <Badge key={p} tone={p === 'READ' ? 'neutral' : 'warn'}>
+            {t.tools.permission[p] ?? p.replace('_', ' ')}
+          </Badge>
+        ))}
+        <Badge tone={tool.risk === 'low' ? 'ok' : tool.risk === 'medium' ? 'neutral' : 'warn'}>{t.tools.risk(tool.risk)}</Badge>
+        <Badge>{tool.cost.model === 'unknown' ? t.tools.card.costUnknown : (t.tools.costModel[tool.cost.model] ?? tool.cost.model.replace('_', ' '))}</Badge>
+      </div>
+
+      {!usable && tool.auth.required && (
+        <p className="mt-3 flex items-start gap-2 text-[0.74rem] leading-relaxed text-[var(--color-ink-faint)]">
           <Icon name="plug" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
-            <span className="font-medium text-[var(--color-ink-dim)]">To connect: </span>
-            {tool.requires}
+            <span className="font-medium text-[var(--color-ink-dim)]">{t.tools.card.toConnect}</span>
+            {t.tools.authKind[tool.auth.kind] ?? tool.auth.kind.replace('_', ' ')}
+            {tool.auth.envVars.length > 0 && <> — {t.tools.card.setOnServer(tool.auth.envVars.join(', '))}</>}
           </span>
         </p>
       )}

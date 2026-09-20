@@ -4,14 +4,11 @@ import { api, ApiClientError } from '../lib/api.ts';
 import { useRouter } from '../lib/router.tsx';
 import { useProviders } from '../hooks/useApi.ts';
 import { cx } from '../lib/format.ts';
+import { t } from '../i18n/index.ts';
 import { Icon } from './icons.tsx';
 import { Button } from './primitives.tsx';
 
-const EXAMPLES = [
-  'Quiero lanzar una tienda online de cookies en Italia.',
-  'Crear una app móvil para reservar pistas de pádel en Turín.',
-  'Abrir una suscripción de café de especialidad en Berlín.',
-];
+const EXAMPLES = t.missions.form.examples;
 
 const MIN_LENGTH = 12;
 const MAX_LENGTH = 4000;
@@ -29,6 +26,7 @@ export function MissionForm({ onCreated }: { onCreated?: () => void }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [prompt, setPrompt] = useState('');
+  const [classic, setClassic] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -46,7 +44,7 @@ export function MissionForm({ onCreated }: { onCreated?: () => void }) {
     setFieldError(null);
 
     try {
-      const response = await api.createMission({ prompt: trimmed });
+      const response = await api.createMission({ prompt: trimmed, mode: classic ? 'classic' : 'madre' });
       setPrompt('');
       onCreated?.();
       navigate({ name: 'mission', id: response.mission.id });
@@ -55,7 +53,7 @@ export function MissionForm({ onCreated }: { onCreated?: () => void }) {
         setFieldError(caught.issueFor('prompt') ?? null);
         setError(caught.issueFor('prompt') === undefined ? caught.message : null);
       } else {
-        setError('No se pudo crear la misión.');
+        setError(t.missions.form.createFailed);
       }
     } finally {
       setSubmitting(false);
@@ -77,7 +75,7 @@ export function MissionForm({ onCreated }: { onCreated?: () => void }) {
     <form
       onSubmit={submit}
       className="panel relative overflow-hidden p-4 sm:p-5"
-      aria-label="Nueva misión"
+      aria-label={t.missions.form.ariaLabel}
     >
       {/* A soft signal glow behind the box, so it reads as the focal point. */}
       <div
@@ -88,7 +86,7 @@ export function MissionForm({ onCreated }: { onCreated?: () => void }) {
       <div className="relative space-y-3.5">
         <div>
           <label htmlFor="mission-prompt" className="sr-only">
-            Describe tu misión
+            {t.missions.form.label}
           </label>
           <textarea
             ref={textareaRef}
@@ -98,7 +96,7 @@ export function MissionForm({ onCreated }: { onCreated?: () => void }) {
             onKeyDown={onKeyDown}
             rows={4}
             maxLength={MAX_LENGTH}
-            placeholder="Describe lo que quieres lograr. El equipo de agentes lo desglosará por ti…"
+            placeholder={t.missions.form.placeholder}
             aria-invalid={invalid}
             className={cx(
               'w-full resize-y rounded-xl border bg-[var(--color-field)] px-4 py-3.5 leading-relaxed text-[var(--color-ink)]',
@@ -112,8 +110,8 @@ export function MissionForm({ onCreated }: { onCreated?: () => void }) {
             <span className={cx(invalid ? 'text-[var(--color-bad)]' : 'text-[var(--color-ink-faint)]')}>
               {fieldError ??
                 (tooShort
-                  ? `Escribe al menos ${MIN_LENGTH} caracteres.`
-                  : 'Ocho agentes trabajarán tu misión en secuencia.')}
+                  ? t.missions.form.tooShort(MIN_LENGTH)
+                  : t.missions.form.hint)}
             </span>
             <span className="tabular shrink-0 text-[var(--color-ink-faint)]">
               {trimmed.length}/{MAX_LENGTH}
@@ -129,6 +127,17 @@ export function MissionForm({ onCreated }: { onCreated?: () => void }) {
             {error}
           </p>
         )}
+
+        <label htmlFor="mission-classic" className="flex min-h-[44px] cursor-pointer items-center gap-2.5 text-[0.76rem] text-[var(--color-ink-dim)]">
+          <input
+            id="mission-classic"
+            type="checkbox"
+            checked={classic}
+            onChange={(event) => setClassic(event.target.checked)}
+            className="h-4 w-4 accent-[var(--color-signal)]"
+          />
+          {t.missions.form.classicOption}
+        </label>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-1.5">
@@ -149,15 +158,13 @@ export function MissionForm({ onCreated }: { onCreated?: () => void }) {
 
           <Button type="submit" disabled={!canSubmit} busy={submitting} className="w-full shrink-0 sm:w-auto sm:min-w-[11rem]">
             {!submitting && <Icon name="play" className="h-4 w-4" />}
-            {submitting ? 'Lanzando…' : 'Ejecutar misión'}
+            {submitting ? t.missions.form.submitting : t.missions.form.submit}
           </Button>
         </div>
 
         {activeProvider !== undefined && (
           <p className="text-[0.7rem] leading-relaxed text-[var(--color-ink-faint)]">
-            Proveedor activo: <span className="font-mono text-[var(--color-ink-dim)]">{activeProvider.label}</span>. Los
-            resultados se generan de forma simulada y no tienen valor analítico: conecta un proveedor real para obtener
-            respuestas reales.
+            {t.missions.form.activeProviderNote(activeProvider.label)}
           </p>
         )}
       </div>

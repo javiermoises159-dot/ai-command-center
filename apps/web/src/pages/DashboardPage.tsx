@@ -1,5 +1,6 @@
 import { MissionCard } from '../components/MissionCard.tsx';
 import { MissionForm } from '../components/MissionForm.tsx';
+import { CommandCenter } from '../components/madre/CommandCenter.tsx';
 import { Icon } from '../components/icons.tsx';
 import {
   Badge,
@@ -15,6 +16,7 @@ import {
 import { agentMeta } from '../lib/agents-meta.ts';
 import { cx, relativeTime } from '../lib/format.ts';
 import { href } from '../lib/router.tsx';
+import { t } from '../i18n/index.ts';
 import { useAgentCatalog, useHealth, useMissions, useStats } from '../hooks/useApi.ts';
 
 export function DashboardPage() {
@@ -32,25 +34,27 @@ export function DashboardPage() {
       <section>
         <p className="mb-2 flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-[var(--color-signal)]">
           <Icon name="sparkles" className="h-3.5 w-3.5" />
-          AI Command Center
+          {t.common.appName}
         </p>
         <h1 className="mb-4 text-[1.7rem] font-semibold leading-tight tracking-tight text-[var(--color-ink)] sm:text-4xl">
-          ¿Qué quieres conseguir hoy?
+          {t.dashboard.heading}
         </h1>
         <MissionForm onCreated={missions.refresh} />
       </section>
 
+      <CommandCenter missions={recent} />
+
       {/* -------------------------------------------------------------- Stats */}
-      <section aria-label="Mission statistics" className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <Stat label="Missions" value={stats.data?.total ?? '—'} loading={statsLoading} />
+      <section aria-label={t.dashboard.stats.ariaLabel} className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <Stat label={t.dashboard.stats.missions} value={stats.data?.total ?? '—'} loading={statsLoading} />
         <Stat
-          label="Active"
+          label={t.dashboard.stats.active}
           value={(stats.data?.running ?? 0) + (stats.data?.pending ?? 0)}
           tone="signal"
           loading={statsLoading}
         />
-        <Stat label="Completed" value={stats.data?.completed ?? '—'} tone="ok" loading={statsLoading} />
-        <Stat label="Failed" value={stats.data?.failed ?? '—'} tone="bad" loading={statsLoading} />
+        <Stat label={t.dashboard.stats.completed} value={stats.data?.completed ?? '—'} tone="ok" loading={statsLoading} />
+        <Stat label={t.dashboard.stats.failed} value={stats.data?.failed ?? '—'} tone="bad" loading={statsLoading} />
       </section>
 
       <div className="grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -60,12 +64,12 @@ export function DashboardPage() {
             action={
               recent.length > 0 ? (
                 <a href={href({ name: 'missions' })} className="text-[0.74rem] font-medium text-[var(--color-signal)] hover:underline">
-                  View all →
+                  {t.dashboard.recent.viewAll}
                 </a>
               ) : undefined
             }
           >
-            Recent missions
+            {t.dashboard.recent.title}
           </SectionTitle>
 
           {missions.error !== null && recent.length === 0 ? (
@@ -75,8 +79,8 @@ export function DashboardPage() {
           ) : recent.length === 0 ? (
             <EmptyState
               icon="target"
-              title="No missions yet"
-              body="Write a mission above and press “Ejecutar misión”. The crew will break it into work and you will see each agent report back here."
+              title={t.dashboard.recent.emptyTitle}
+              body={t.dashboard.recent.emptyBody}
             />
           ) : (
             <div className="space-y-2">
@@ -95,15 +99,15 @@ export function DashboardPage() {
             <SectionTitle
               action={
                 <a href={href({ name: 'agents' })} className="text-[0.74rem] font-medium text-[var(--color-signal)] hover:underline">
-                  Details →
+                  {t.dashboard.agents.details}
                 </a>
               }
             >
-              Agents available
+              {t.dashboard.agents.title}
             </SectionTitle>
             <Panel className="divide-y divide-[var(--color-edge)]">
               {catalog.length === 0 && (
-                <div className="space-y-3 p-3.5" role="status" aria-label="Loading agents">
+                <div className="space-y-3 p-3.5" role="status" aria-label={t.dashboard.agents.loading}>
                   {Array.from({ length: 4 }, (_, i) => (
                     <Skeleton key={i} className="h-8 w-full" />
                   ))}
@@ -116,7 +120,7 @@ export function DashboardPage() {
                     <p className="truncate text-[0.82rem] font-medium text-[var(--color-ink)]">{agent.name}</p>
                     <p className="truncate text-[0.7rem] text-[var(--color-ink-faint)]">{agent.role}</p>
                   </div>
-                  <Badge tone="ok">Ready</Badge>
+                  <Badge tone="ok">{t.dashboard.agents.ready}</Badge>
                 </div>
               ))}
             </Panel>
@@ -133,26 +137,27 @@ function SystemStatusPanel({ activeMissions }: { activeMissions: number }) {
   const checking = health.data === null && health.error === null;
   const online = health.data !== null && health.error === null;
 
-  const rows: { label: string; value: string; tone?: 'ok' | 'bad' | 'warn' }[] = online
+  const rows: { id: string; label: string; value: string; tone?: 'ok' | 'bad' | 'warn' }[] = online
     ? [
-        { label: 'API', value: `Online · ${health.data?.latencyMs ?? 0} ms`, tone: 'ok' },
-        { label: 'Version', value: `v${health.data?.health.version}` },
+        { id: 'api', label: t.dashboard.system.api, value: t.dashboard.system.online(health.data?.latencyMs ?? 0), tone: 'ok' },
+        { id: 'version', label: t.dashboard.system.version, value: `v${health.data?.health.version}` },
         {
-          label: 'Provider',
-          value: health.data?.health.provider ?? 'none',
+          id: 'provider',
+          label: t.dashboard.system.provider,
+          value: t.dashboard.system.providerName(health.data?.health.provider ?? null),
           tone: health.data?.health.provider === 'mock' ? 'warn' : undefined,
         },
-        { label: 'Active missions', value: String(activeMissions) },
-        { label: 'Checked', value: relativeTime(health.data?.health.time ?? null) },
+        { id: 'active', label: t.dashboard.system.activeMissions, value: String(activeMissions) },
+        { id: 'checked', label: t.dashboard.system.checked, value: relativeTime(health.data?.health.time ?? null) },
       ]
     : [];
 
   return (
     <section>
-      <SectionTitle>System status</SectionTitle>
+      <SectionTitle>{t.dashboard.system.title}</SectionTitle>
       <Panel className="p-3.5">
         {checking ? (
-          <div className="space-y-2.5" role="status" aria-label="Checking system status">
+          <div className="space-y-2.5" role="status" aria-label={t.dashboard.system.checking}>
             {Array.from({ length: 4 }, (_, i) => (
               <Skeleton key={i} className="h-4 w-full" />
             ))}
@@ -161,14 +166,14 @@ function SystemStatusPanel({ activeMissions }: { activeMissions: number }) {
           <div className="flex items-start gap-2.5 text-[0.82rem] text-[var(--color-bad)]" role="alert">
             <span className="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--color-bad)]" aria-hidden />
             <div>
-              <p className="font-medium">API unreachable</p>
-              <p className="mt-0.5 text-[var(--color-ink-faint)]">{health.error ?? 'Is the server running?'}</p>
+              <p className="font-medium">{t.dashboard.system.unreachable}</p>
+              <p className="mt-0.5 text-[var(--color-ink-faint)]">{health.error ?? t.dashboard.system.unreachableHint}</p>
             </div>
           </div>
         ) : (
           <dl className="space-y-2.5 text-[0.8rem]">
             {rows.map((row) => (
-              <div key={row.label} className="flex items-center justify-between gap-3">
+              <div key={row.id} className="flex items-center justify-between gap-3">
                 <dt className="text-[var(--color-ink-faint)]">{row.label}</dt>
                 <dd
                   className={cx(
@@ -179,7 +184,7 @@ function SystemStatusPanel({ activeMissions }: { activeMissions: number }) {
                     row.tone === undefined && 'text-[var(--color-ink)]',
                   )}
                 >
-                  {row.label === 'API' && <span className="h-2 w-2 rounded-full bg-[var(--color-ok)]" aria-hidden />}
+                  {row.id === 'api' && <span className="h-2 w-2 rounded-full bg-[var(--color-ok)]" aria-hidden />}
                   {row.value}
                 </dd>
               </div>
@@ -188,7 +193,7 @@ function SystemStatusPanel({ activeMissions }: { activeMissions: number }) {
         )}
         {online && health.data?.health.provider === 'mock' && (
           <p className="mt-3 border-t border-[var(--color-edge)] pt-3 text-[0.72rem] leading-relaxed text-[var(--color-ink-faint)]">
-            Running on the simulated provider. Output is structurally real but carries no analysis.
+            {t.dashboard.system.simulatedNote}
           </p>
         )}
       </Panel>

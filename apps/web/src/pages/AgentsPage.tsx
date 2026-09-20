@@ -1,30 +1,34 @@
 import { Icon } from '../components/icons.tsx';
 import { Badge, EmptyState, ErrorBanner, IconTile, PageHeader, Panel, Skeleton, StatusChip } from '../components/primitives.tsx';
 import { useAgentCatalog } from '../hooks/useApi.ts';
+import { RegistryAgents } from '../components/madre/RegistryAgents.tsx';
 import { useRecentMissions } from '../hooks/useRecentMissions.ts';
 import { agentMeta } from '../lib/agents-meta.ts';
 import { deriveCrewState, emptyCrewState, type CrewMemberState } from '../lib/crew.ts';
 import { cleanPrompt, cx, duration, relativeTime } from '../lib/format.ts';
 import { href } from '../lib/router.tsx';
+import { t } from '../i18n/index.ts';
 import type { AgentDefinition } from '../lib/api.ts';
+
+const RECENT_LIMIT = 20;
 
 export function AgentsPage() {
   const catalog = useAgentCatalog();
-  const recent = useRecentMissions(20);
+  const recent = useRecentMissions(RECENT_LIMIT);
   const crew = deriveCrewState(recent.missions);
 
   return (
     <div className="space-y-5">
       <PageHeader
         icon="bot"
-        title="Agents"
-        description="The eight specialists that work every mission, in order. State and counts are read live from your recent missions."
+        title={t.agents.title}
+        description={t.agents.description}
       />
 
       {recent.error !== null && <ErrorBanner message={recent.error} onRetry={recent.refresh} />}
 
       {catalog.length === 0 ? (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2" role="status" aria-label="Loading agents">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2" role="status" aria-label={t.agents.loadingAria}>
           {Array.from({ length: 4 }, (_, i) => (
             <Panel key={i} className="space-y-3 p-4">
               <Skeleton className="h-10 w-10 rounded-xl" />
@@ -37,8 +41,8 @@ export function AgentsPage() {
       ) : (
         <>
           <p className="tabular text-[0.72rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
-            {catalog.length} agents · pipeline order
-            {recent.live && <span className="ml-2 text-[var(--color-signal)]">● live</span>}
+            {t.agents.summary(catalog.length)}
+            {recent.live && <span className="ml-2 text-[var(--color-signal)]">● {t.agents.live}</span>}
           </p>
           <div className="acc-stagger grid grid-cols-1 gap-3 md:grid-cols-2">
             {catalog.map((agent, index) => (
@@ -51,11 +55,12 @@ export function AgentsPage() {
               />
             ))}
           </div>
+          <RegistryAgents />
           {recent.missions.length === 0 && !recent.loading && (
             <EmptyState
               icon="play"
-              title="No executions yet"
-              body="Every agent is ready. Launch a mission from the Dashboard and their live state and counts will appear here."
+              title={t.agents.empty.title}
+              body={t.agents.empty.body}
             />
           )}
         </>
@@ -88,7 +93,7 @@ function AgentCard({
             <code className="rounded bg-[var(--color-tint)] px-1.5 py-0.5 font-mono text-[0.68rem] text-[var(--color-ink-faint)]">
               {agent.id}
             </code>
-            {agent.kind !== 'worker' && <Badge tone="signal">{agent.kind}</Badge>}
+            {agent.kind !== 'worker' && <Badge tone="signal">{t.agents.kind[agent.kind] ?? agent.kind}</Badge>}
           </div>
           <p className="mt-1 text-[0.82rem] text-[var(--color-ink-dim)]">{agent.role}</p>
         </div>
@@ -96,12 +101,12 @@ function AgentCard({
       </div>
 
       <p className="mt-3 text-[0.8rem] leading-relaxed text-[var(--color-ink-faint)]">
-        <span className="font-medium text-[var(--color-ink-dim)]">Delivers: </span>
+        <span className="font-medium text-[var(--color-ink-dim)]">{t.agents.delivers}</span>
         {agent.deliverable}
       </p>
 
       {meta.capabilities.length > 0 && (
-        <ul className="mt-3 flex flex-wrap gap-1.5" aria-label={`${agent.name} capabilities`}>
+        <ul className="mt-3 flex flex-wrap gap-1.5" aria-label={t.agents.capabilitiesAria(agent.name)}>
           {meta.capabilities.map((capability) => (
             <li
               key={capability}
@@ -120,7 +125,7 @@ function AgentCard({
         ) : state.working !== null ? (
           <div className="flex flex-wrap items-center gap-2 text-[0.78rem]">
             <StatusChip status="running" />
-            <span className="text-[var(--color-ink-faint)]">on</span>
+            <span className="text-[var(--color-ink-faint)]">{t.agents.state.on}</span>
             <a
               href={href({ name: 'mission', id: state.working.missionId })}
               className="min-w-0 truncate font-medium text-[var(--color-signal)] hover:underline"
@@ -130,8 +135,8 @@ function AgentCard({
           </div>
         ) : state.last !== null ? (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] text-[var(--color-ink-faint)]">
-            <Badge>Idle</Badge>
-            <span>last run</span>
+            <Badge>{t.agents.state.idle}</Badge>
+            <span>{t.agents.state.lastRun}</span>
             <StatusChip status={state.last.status} />
             <a
               href={href({ name: 'mission', id: state.last.missionId })}
@@ -142,16 +147,16 @@ function AgentCard({
           </div>
         ) : (
           <div className="flex items-center gap-2 text-[0.78rem] text-[var(--color-ink-faint)]">
-            <Badge tone="ok">Ready</Badge>
-            <span>Not run yet</span>
+            <Badge tone="ok">{t.agents.state.ready}</Badge>
+            <span>{t.agents.state.neverRun}</span>
           </div>
         )}
 
         <dl className="tabular mt-3 grid grid-cols-3 gap-2 text-center">
-          <Metric label="Done" value={loading ? '…' : String(state.completed)} tone="ok" />
-          <Metric label="Failed" value={loading ? '…' : String(state.failed)} tone={state.failed > 0 ? 'bad' : 'neutral'} />
+          <Metric label={t.agents.metrics.done} value={loading ? '…' : String(state.completed)} tone="ok" />
+          <Metric label={t.agents.metrics.failed} value={loading ? '…' : String(state.failed)} tone={state.failed > 0 ? 'bad' : 'neutral'} />
           <Metric
-            label="Avg time"
+            label={t.agents.metrics.avgTime}
             value={loading ? '…' : runs === 0 || state.avgDurationMs === null ? '—' : duration(state.avgDurationMs)}
             tone="neutral"
           />
@@ -159,7 +164,7 @@ function AgentCard({
       </div>
       <p className="mt-2.5 flex items-center gap-1.5 text-[0.66rem] text-[var(--color-ink-faint)]">
         <Icon name="clock" className="h-3 w-3" />
-        Counted over your 20 most recent missions
+        {t.agents.countedOver(RECENT_LIMIT)}
       </p>
     </Panel>
   );

@@ -2,10 +2,12 @@ import { useMemo, useState } from 'react';
 
 import { Icon, type IconName } from '../components/icons.tsx';
 import { Button, EmptyState, ErrorBanner, LinkButton, ListSkeleton, PageHeader, Segmented } from '../components/primitives.tsx';
+import { EngineActivity } from '../components/madre/EngineActivity.tsx';
 import { useRecentMissions } from '../hooks/useRecentMissions.ts';
 import { buildActivity, matchesGroup, type ActivityEvent, type ActivityGroup, type ActivityKind } from '../lib/activity.ts';
 import { clockTime, cleanPrompt, cx, dayLabel, relativeTime } from '../lib/format.ts';
 import { href } from '../lib/router.tsx';
+import { t } from '../i18n/index.ts';
 
 const PAGE_SIZE = 30;
 
@@ -17,55 +19,55 @@ interface KindStyle {
 
 const KIND_STYLES: Record<ActivityKind, KindStyle> = {
   mission_created: {
-    label: 'Mission created',
+    label: t.activity.kinds.mission_created,
     icon: 'plus',
     tone: 'bg-violet-600/10 text-violet-700 ring-violet-600/25 dark:bg-violet-400/10 dark:text-violet-300 dark:ring-violet-400/25',
   },
   run_started: {
-    label: 'Run started',
+    label: t.activity.kinds.run_started,
     icon: 'play',
     tone: 'bg-cyan-600/10 text-cyan-800 ring-cyan-700/25 dark:bg-cyan-400/10 dark:text-cyan-300 dark:ring-cyan-400/25',
   },
   agent_started: {
-    label: 'Agent started',
+    label: t.activity.kinds.agent_started,
     icon: 'circle-dot',
     tone: 'bg-cyan-600/10 text-cyan-800 ring-cyan-700/25 dark:bg-cyan-400/10 dark:text-cyan-300 dark:ring-cyan-400/25',
   },
   agent_completed: {
-    label: 'Agent completed',
+    label: t.activity.kinds.agent_completed,
     icon: 'check',
     tone: 'bg-emerald-600/10 text-emerald-800 ring-emerald-700/25 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/25',
   },
   agent_failed: {
-    label: 'Agent failed',
+    label: t.activity.kinds.agent_failed,
     icon: 'alert',
     tone: 'bg-rose-600/10 text-rose-800 ring-rose-700/25 dark:bg-rose-400/10 dark:text-rose-300 dark:ring-rose-400/25',
   },
   agent_skipped: {
-    label: 'Agent skipped',
+    label: t.activity.kinds.agent_skipped,
     icon: 'skip',
     tone: 'bg-[var(--color-tint)] text-[var(--color-ink-faint)] ring-[var(--color-line)]',
   },
   run_completed: {
-    label: 'Run completed',
+    label: t.activity.kinds.run_completed,
     icon: 'flag',
     tone: 'bg-emerald-600/10 text-emerald-800 ring-emerald-700/25 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/25',
   },
   run_failed: {
-    label: 'Run failed',
+    label: t.activity.kinds.run_failed,
     icon: 'alert',
     tone: 'bg-rose-600/10 text-rose-800 ring-rose-700/25 dark:bg-rose-400/10 dark:text-rose-300 dark:ring-rose-400/25',
   },
 };
 
 const GROUPS: readonly { value: ActivityGroup; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'runs', label: 'Missions & runs' },
-  { value: 'agents', label: 'Agents' },
-  { value: 'failures', label: 'Failures' },
+  { value: 'all', label: t.activity.groups.all },
+  { value: 'runs', label: t.activity.groups.runs },
+  { value: 'agents', label: t.activity.groups.agents },
+  { value: 'failures', label: t.activity.groups.failures },
 ];
 
-export function ActivityPage() {
+function MissionActivity() {
   const recent = useRecentMissions(15);
   const [group, setGroup] = useState<ActivityGroup>('all');
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -88,15 +90,9 @@ export function ActivityPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        icon="activity"
-        title="Activity"
-        description="A timeline of everything that happened across your missions: creations, runs, and every agent starting, finishing or failing."
-      />
-
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Segmented
-          label="Filter activity"
+          label={t.activity.filterAria}
           value={group}
           onChange={(next) => {
             setGroup(next);
@@ -107,7 +103,7 @@ export function ActivityPage() {
         {recent.live && (
           <span className="flex items-center gap-2 text-[0.74rem] font-medium text-[var(--color-signal)]">
             <span className="h-2 w-2 rounded-full bg-[var(--color-signal)] acc-pulse" aria-hidden />
-            Live
+            {t.activity.live}
           </span>
         )}
       </div>
@@ -119,23 +115,19 @@ export function ActivityPage() {
       ) : all.length === 0 ? (
         <EmptyState
           icon="activity"
-          title="Nothing has happened yet"
-          body="Once you launch a mission, its creation, each run and every agent's progress is recorded here in order."
+          title={t.activity.empty.title}
+          body={t.activity.empty.body}
           action={
             <LinkButton href={href({ name: 'dashboard' })} variant="primary">
-              Launch a mission
+              {t.activity.empty.action}
             </LinkButton>
           }
         />
       ) : filtered.length === 0 ? (
         <EmptyState
           icon="check"
-          title={group === 'failures' ? 'No failures' : 'No matching activity'}
-          body={
-            group === 'failures'
-              ? 'Nothing has failed in your recent missions.'
-              : 'Try a different filter to see the rest of the timeline.'
-          }
+          title={group === 'failures' ? t.activity.noMatch.failuresTitle : t.activity.noMatch.otherTitle}
+          body={group === 'failures' ? t.activity.noMatch.failuresBody : t.activity.noMatch.otherBody}
         />
       ) : (
         <div className="space-y-6">
@@ -155,8 +147,8 @@ export function ActivityPage() {
           {filtered.length > shown.length && (
             <div className="flex justify-center">
               <Button variant="ghost" onClick={() => setLimit((n) => n + PAGE_SIZE)}>
-                Show {Math.min(PAGE_SIZE, filtered.length - shown.length)} more
-                <span className="tabular text-[var(--color-ink-faint)]">({filtered.length - shown.length} left)</span>
+                {t.activity.showMore(Math.min(PAGE_SIZE, filtered.length - shown.length))}
+                <span className="tabular text-[var(--color-ink-faint)]">{t.activity.remaining(filtered.length - shown.length)}</span>
               </Button>
             </div>
           )}
@@ -186,7 +178,7 @@ function EventRow({ event }: { event: ActivityEvent }) {
               <span className="text-[0.86rem] text-[var(--color-ink-dim)]">· {event.agentName}</span>
             )}
             {event.runAttempt !== null && (
-              <span className="tabular text-[0.7rem] text-[var(--color-ink-faint)]">run #{event.runAttempt}</span>
+              <span className="tabular text-[0.7rem] text-[var(--color-ink-faint)]">{t.activity.runNumber(event.runAttempt)}</span>
             )}
           </span>
           <span className="block truncate text-[0.76rem] text-[var(--color-ink-faint)] group-hover:text-[var(--color-ink-dim)]">
@@ -205,5 +197,30 @@ function EventRow({ event }: { event: ActivityEvent }) {
         </time>
       </a>
     </li>
+  );
+}
+
+export function ActivityPage() {
+  const [source, setSource] = useState<'missions' | 'engine'>('missions');
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        icon="activity"
+        title={t.activity.title}
+        description={t.activity.description}
+      />
+      <Segmented
+        label={t.activity.sourceAria}
+        value={source}
+        onChange={setSource}
+        options={[
+          { value: 'missions', label: t.activity.sources.missions },
+          { value: 'engine', label: t.activity.sources.engine },
+        ]}
+      />
+      <div key={source} className="acc-fade">
+        {source === 'missions' ? <MissionActivity /> : <EngineActivity />}
+      </div>
+    </div>
   );
 }

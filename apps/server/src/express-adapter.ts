@@ -10,6 +10,7 @@
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import { buildOpenApiDocument } from '@acc/contracts';
 
+import { RateLimiter } from './http/rate-limit.ts';
 import { createRouter } from './http/router.ts';
 import type { HttpMethod, HttpRequest } from './http/types.ts';
 import type { Container } from './container.ts';
@@ -21,6 +22,7 @@ export function createExpressApp(container: Container): Express {
   const router = createRouter({
     missions: container.missions,
     providers: container.providers,
+    madre: container.madre.service,
     logger: container.logger,
     version: container.config.version,
   });
@@ -28,13 +30,14 @@ export function createExpressApp(container: Container): Express {
   app.disable('x-powered-by');
   app.use(express.json({ limit: MAX_BODY_BYTES }));
   app.use(cors(container.config.corsOrigins));
+  app.use(rateLimit(container.config.rateLimit));
 
   // Malformed JSON arrives here as a SyntaxError from express.json. Without
   // this it would surface as an opaque 500.
   app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
     if (error instanceof SyntaxError && 'body' in error) {
       res.status(400).json({
-        error: { code: 'validation_error', message: 'The request body is not valid JSON.', issues: [] },
+        error: { code: 'validation_error', message: 'El cuerpo de la petición no es JSON válido.', issues: [] },
       });
       return;
     }
@@ -71,14 +74,14 @@ export function createExpressApp(container: Container): Express {
         error: error instanceof Error ? error.message : String(error),
       });
       res.status(500).json({
-        error: { code: 'internal_error', message: 'An unexpected error occurred.', issues: [] },
+        error: { code: 'internal_error', message: 'Ha ocurrido un error inesperado.', issues: [] },
       });
     }
   });
 
   app.use((req: Request, res: Response) => {
     res.status(404).json({
-      error: { code: 'not_found', message: `No route matches ${req.method} ${req.path}.`, issues: [] },
+      error: { code: 'not_found', message: `Ninguna ruta coincide con ${req.method} ${req.path}.`, issues: [] },
     });
   });
 
@@ -94,11 +97,46 @@ export function createExpressApp(container: Container): Express {
       error: error instanceof Error ? error.message : String(error),
     });
     res.status(500).json({
-      error: { code: 'internal_error', message: 'An unexpected error occurred.', issues: [] },
+      error: { code: 'internal_error', message: 'Ha ocurrido un error inesperado.', issues: [] },
     });
   });
 
   return app;
+}
+
+/**
+ * Stops one runaway client from saturating the API.
+ *
+ * In-process and per address, so it is a guard rail rather than a security
+ * control: it catches retry storms and stuck polling loops. The ceiling is well
+ * above what the app itself needs. `OPTIONS` is exempt so a blocked client
+ * still gets a CORS answer instead of an opaque failure.
+ */
+function rateLimit(options: { max: number; windowMs: number }) {
+  const limiter = new RateLimiter(options);
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (req.method === 'OPTIONS') {
+      next();
+      return;
+    }
+    const key = req.ip ?? req.socket.remoteAddress ?? 'unknown';
+    const verdict = limiter.check(key);
+    res.setHeader('RateLimit-Limit', String(options.max));
+    res.setHeader('RateLimit-Remaining', String(verdict.remaining));
+    res.setHeader('RateLimit-Reset', String(Math.ceil((verdict.resetAt - Date.now()) / 1000)));
+    if (verdict.allowed) {
+      next();
+      return;
+    }
+    res.setHeader('Retry-After', String(verdict.retryAfterSeconds));
+    res.status(429).json({
+      error: {
+        code: 'rate_limited',
+        message: `Demasiadas peticiones. Vuelve a intentarlo en ${verdict.retryAfterSeconds} s.`,
+        issues: [],
+      },
+    });
+  };
 }
 
 /**
@@ -111,7 +149,7 @@ function cors(allowedOrigins: string[]) {
     if (typeof origin === 'string' && allowedOrigins.includes(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Vary', 'Origin');
-      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'content-type');
     }
     if (req.method === 'OPTIONS') {

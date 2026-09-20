@@ -29,6 +29,26 @@ import {
   type RunMissionResponse,
   type StatsResponse,
 } from './schemas.ts';
+import {
+  cancelMissionResponseSchema,
+  madreActivityResponseSchema,
+  madreAgentsResponseSchema,
+  madreApprovalsResponseSchema,
+  madreBudgetResponseSchema,
+  madreCompileResponseSchema,
+  madreDecisionResponseSchema,
+  madreForgetResponseSchema,
+  madreMemoryResponseSchema,
+  madreOverviewSchema,
+  madrePermissionsResponseSchema,
+  madreProvidersResponseSchema,
+  madreRememberResponseSchema,
+  madreSnapshotSchema,
+  madreTraceResponseSchema,
+  madreToolsResponseSchema,
+  type MadreBudgetRequest,
+  type MadreRememberRequest,
+} from './madre.ts';
 import type { ZodType } from 'zod';
 
 /** Error carrying the server's own code and field issues. */
@@ -89,7 +109,7 @@ export function createApiClient(options: ApiClientOptions) {
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') throw error;
-      throw new ApiClientError(0, 'network_error', 'Could not reach the server. Is it running?');
+      throw new ApiClientError(0, 'network_error', 'No se pudo conectar con el servidor. ¿Está en marcha?');
     }
 
     const payload: unknown = await response.json().catch(() => null);
@@ -104,7 +124,7 @@ export function createApiClient(options: ApiClientOptions) {
           parsed.data.error.issues,
         );
       }
-      throw new ApiClientError(response.status, 'unknown_error', `Request failed with status ${response.status}.`);
+      throw new ApiClientError(response.status, 'unknown_error', `La solicitud falló con el estado ${response.status}.`);
     }
 
     const parsed = schema.safeParse(payload);
@@ -112,7 +132,7 @@ export function createApiClient(options: ApiClientOptions) {
       throw new ApiClientError(
         response.status,
         'contract_mismatch',
-        `The server returned a shape this client does not understand (${method} ${path}).`,
+        `El servidor devolvió una respuesta que esta aplicación no entiende (${method} ${path}).`,
       );
     }
     return parsed.data;
@@ -148,6 +168,31 @@ export function createApiClient(options: ApiClientOptions) {
         body,
         ...(signal ? { signal } : {}),
       }),
+
+    // -- MADRE ---------------------------------------------------------------
+
+    madreOverview: (signal?: AbortSignal) => request('GET', '/api/madre/overview', madreOverviewSchema, signal ? { signal } : {}),
+    madreAgents: (signal?: AbortSignal) => request('GET', '/api/madre/agents', madreAgentsResponseSchema, signal ? { signal } : {}),
+    madreProviders: (signal?: AbortSignal) => request('GET', '/api/madre/providers', madreProvidersResponseSchema, signal ? { signal } : {}),
+    madreTools: (signal?: AbortSignal) => request('GET', '/api/madre/tools', madreToolsResponseSchema, signal ? { signal } : {}),
+    madrePermissions: (signal?: AbortSignal) => request('GET', '/api/madre/permissions', madrePermissionsResponseSchema, signal ? { signal } : {}),
+    madreActivity: (limit = 60, signal?: AbortSignal) => request('GET', '/api/madre/activity', madreActivityResponseSchema, { query: { limit }, ...(signal ? { signal } : {}) }),
+    madreCompile: (prompt: string, signal?: AbortSignal) => request('POST', '/api/madre/compile', madreCompileResponseSchema, { body: { prompt }, ...(signal ? { signal } : {}) }),
+    madreMemory: (query: { q?: string; type?: string; limit?: number } = {}, signal?: AbortSignal) => request('GET', '/api/madre/memory', madreMemoryResponseSchema, { query, ...(signal ? { signal } : {}) }),
+    madreRemember: (body: MadreRememberRequest, signal?: AbortSignal) => request('POST', '/api/madre/memory', madreRememberResponseSchema, { body, ...(signal ? { signal } : {}) }),
+    madreForget: (id: string, signal?: AbortSignal) => request('DELETE', `/api/madre/memory/${encodeURIComponent(id)}`, madreForgetResponseSchema, signal ? { signal } : {}),
+    madreBudget: (signal?: AbortSignal) => request('GET', '/api/madre/budget', madreBudgetResponseSchema, signal ? { signal } : {}),
+    madreSetBudget: (body: MadreBudgetRequest, signal?: AbortSignal) => request('PATCH', '/api/madre/budget', madreBudgetResponseSchema, { body, ...(signal ? { signal } : {}) }),
+    madreApprovals: (signal?: AbortSignal) => request('GET', '/api/madre/approvals', madreApprovalsResponseSchema, signal ? { signal } : {}),
+    decideApproval: (id: string, decision: 'approve' | 'deny', note?: string, signal?: AbortSignal) =>
+      request('POST', `/api/madre/approvals/${encodeURIComponent(id)}/${decision}`, madreDecisionResponseSchema, { body: note === undefined ? {} : { note }, ...(signal ? { signal } : {}) }),
+    missionMadre: (id: string, signal?: AbortSignal) => request('GET', `/api/missions/${encodeURIComponent(id)}/madre`, madreSnapshotSchema, signal ? { signal } : {}),
+    missionTrace: (id: string, signal?: AbortSignal) =>
+      request('GET', `/api/missions/${encodeURIComponent(id)}/trace`, madreTraceResponseSchema, signal ? { signal } : {}),
+    /** Probes every provider. Slower than the rest: it goes out to the network. */
+    madreProviderHealth: (signal?: AbortSignal) =>
+      request('POST', '/api/madre/providers/health', madreProvidersResponseSchema, signal ? { signal } : {}),
+    cancelMission: (id: string, signal?: AbortSignal) => request('POST', `/api/missions/${encodeURIComponent(id)}/cancel`, cancelMissionResponseSchema, signal ? { signal } : {}),
   };
 }
 

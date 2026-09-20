@@ -6,6 +6,9 @@
  * availability.
  */
 
+import { DEFAULT_ALERT_AT_FRACTION } from '@acc/madre';
+import { realProviderOptionsFromEnv, type RealProviderEnv } from '@acc/providers';
+
 export interface ServerConfig {
   port: number;
   corsOrigins: string[];
@@ -26,6 +29,40 @@ export interface ServerConfig {
 
   mockMinLatencyMs: number;
   mockMaxLatencyMs: number;
+
+  /** Engine for new missions when the request names none. */
+  defaultMissionMode: 'classic' | 'madre';
+  /** Base URL of a local Ollama server. Unset means Ollama is NOT CONNECTED. */
+  ollamaBaseUrl: string | undefined;
+  /**
+   * Credentials and models for OpenAI, Anthropic and Gemini. SERVER ONLY: this
+   * object holds API keys, so it is handed to the provider constructors and
+   * nowhere else — never logged, never put in a response, never stored.
+   */
+  realProviders: RealProviderEnv;
+  /** Provider ids the operator switched off with MADRE_DISABLED_PROVIDERS. */
+  disabledProviders: string[];
+  /** A guard rail against runaway clients, not a security control. */
+  rateLimit: {
+    max: number;
+    windowMs: number;
+  };
+  madre: {
+    parallelism: number;
+    maxRevisionRounds: number;
+    budget: {
+      perMissionUsd: number | null;
+      dailyUsd: number | null;
+      monthlyUsd: number | null;
+      onExceed: 'block' | 'fallback_local' | 'ask';
+      /** Warn once spending passes this share of a limit (0..1). null = no warning. */
+      alertAtFraction: number | null;
+      /** Per-tool ceilings in USD, from the operator. */
+      perToolUsd: Record<string, number>;
+    };
+    /** Prices per 1k tokens for external models, from the operator. MADRE never guesses one. */
+    prices: Record<string, { inputPer1kUsd: number; outputPer1kUsd: number }>;
+  };
 }
 
 function str(env: NodeJS.ProcessEnv, key: string): string | undefined {
@@ -51,6 +88,74 @@ function bool(env: NodeJS.ProcessEnv, key: string, fallback: boolean): boolean {
   throw new Error(`Environment variable ${key} must be true or false, got "${raw}".`);
 }
 
+function money(env: NodeJS.ProcessEnv, key: string): number | null {
+  const raw = str(env, key);
+  if (raw === undefined) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`Environment variable ${key} must be a non-negative number, got "${raw}".`);
+  }
+  return parsed;
+}
+
+/**
+ * A percentage, read as a fraction. Absent leaves the controller's own default
+ * in place; 0 switches the warning off without switching the limits off.
+ */
+function fraction(env: NodeJS.ProcessEnv, key: string): number | null {
+  const raw = str(env, key);
+  if (raw === undefined) return DEFAULT_ALERT_AT_FRACTION;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+    throw new Error(`Environment variable ${key} must be a percentage between 0 and 100, got "${raw}".`);
+  }
+  return parsed === 0 ? null : parsed / 100;
+}
+
+/** `MADRE_TOOL_BUDGETS_JSON={"web.search":2.5}` — ceilings the operator set, never invented. */
+function toolBudgets(env: NodeJS.ProcessEnv): Record<string, number> {
+  const raw = str(env, 'MADRE_TOOL_BUDGETS_JSON');
+  if (raw === undefined) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('Environment variable MADRE_TOOL_BUDGETS_JSON is not valid JSON.');
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('Environment variable MADRE_TOOL_BUDGETS_JSON must be a JSON object of toolId -> USD.');
+  }
+  const out: Record<string, number> = {};
+  for (const [toolId, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      throw new Error(`MADRE_TOOL_BUDGETS_JSON: "${toolId}" must be a non-negative number.`);
+    }
+    out[toolId] = value;
+  }
+  return out;
+}
+
+function prices(env: NodeJS.ProcessEnv): ServerConfig['madre']['prices'] {
+  const raw = str(env, 'MADRE_PRICES_JSON');
+  if (raw === undefined) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('MADRE_PRICES_JSON must be valid JSON, e.g. {"openai:gpt-x":{"inputPer1kUsd":0.001,"outputPer1kUsd":0.002}}.');
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('MADRE_PRICES_JSON must be a JSON object.');
+  const out: ServerConfig['madre']['prices'] = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    const v = value as { inputPer1kUsd?: unknown; outputPer1kUsd?: unknown };
+    if (typeof v?.inputPer1kUsd !== 'number' || typeof v?.outputPer1kUsd !== 'number' || v.inputPer1kUsd < 0 || v.outputPer1kUsd < 0) {
+      throw new Error(`MADRE_PRICES_JSON entry "${key}" needs non-negative numeric inputPer1kUsd and outputPer1kUsd.`);
+    }
+    out[key] = { inputPer1kUsd: v.inputPer1kUsd, outputPer1kUsd: v.outputPer1kUsd };
+  }
+  return out;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const persistenceRaw = str(env, 'PERSISTENCE') ?? 'postgres';
   if (persistenceRaw !== 'postgres' && persistenceRaw !== 'memory') {
@@ -73,6 +178,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     throw new Error('MOCK_MAX_LATENCY_MS must be greater than or equal to MOCK_MIN_LATENCY_MS.');
   }
 
+  const modeRaw = str(env, 'DEFAULT_MISSION_MODE') ?? 'madre';
+  if (modeRaw !== 'classic' && modeRaw !== 'madre') {
+    throw new Error(`DEFAULT_MISSION_MODE must be "classic" or "madre", got "${modeRaw}".`);
+  }
+  const onExceedRaw = str(env, 'MADRE_BUDGET_ON_EXCEED') ?? 'block';
+  if (onExceedRaw !== 'block' && onExceedRaw !== 'fallback_local' && onExceedRaw !== 'ask') {
+    throw new Error(`MADRE_BUDGET_ON_EXCEED must be block, fallback_local or ask, got "${onExceedRaw}".`);
+  }
+
   return {
     port: int(env, 'PORT', 3001),
     corsOrigins: (str(env, 'CORS_ORIGIN') ?? 'http://localhost:5173')
@@ -81,6 +195,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
       .filter(Boolean),
     logLevel: logLevelRaw as ServerConfig['logLevel'],
     version: str(env, 'APP_VERSION') ?? '0.1.0',
+
+    // 600/min is roughly twenty times what the app's own polling needs, so a
+    // normal session never meets it and a stuck loop does.
+    rateLimit: {
+      max: int(env, 'RATE_LIMIT_MAX', 600),
+      windowMs: int(env, 'RATE_LIMIT_WINDOW_MS', 60_000),
+    },
 
     persistence: persistenceRaw,
     databaseUrl,
@@ -96,5 +217,26 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
 
     mockMinLatencyMs: mockMin,
     mockMaxLatencyMs: mockMax,
+
+    defaultMissionMode: modeRaw,
+    ollamaBaseUrl: str(env, 'OLLAMA_BASE_URL'),
+    realProviders: realProviderOptionsFromEnv(env),
+    disabledProviders: (str(env, 'MADRE_DISABLED_PROVIDERS') ?? '')
+      .split(',')
+      .map((id) => id.trim().toLowerCase())
+      .filter(Boolean),
+    madre: {
+      parallelism: Math.max(1, int(env, 'MADRE_PARALLELISM', 2)),
+      maxRevisionRounds: int(env, 'MADRE_MAX_REVISION_ROUNDS', 2),
+      budget: {
+        perMissionUsd: money(env, 'MADRE_BUDGET_PER_MISSION_USD'),
+        dailyUsd: money(env, 'MADRE_BUDGET_DAILY_USD'),
+        monthlyUsd: money(env, 'MADRE_BUDGET_MONTHLY_USD'),
+        onExceed: onExceedRaw,
+        alertAtFraction: fraction(env, 'MADRE_BUDGET_ALERT_AT_PERCENT'),
+        perToolUsd: toolBudgets(env),
+      },
+      prices: prices(env),
+    },
   };
 }

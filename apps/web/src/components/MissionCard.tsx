@@ -1,6 +1,7 @@
 import { absoluteTime, cleanPrompt, cx, excerpt, relativeTime } from '../lib/format.ts';
 import { href } from '../lib/router.tsx';
 import type { MissionSummary } from '../lib/api.ts';
+import { t } from '../i18n/index.ts';
 import { Icon } from './icons.tsx';
 import { ProgressBar, StatusChip } from './primitives.tsx';
 
@@ -42,7 +43,7 @@ export function MissionCard({ summary }: { summary: MissionSummary }) {
         </p>
       ) : summary.status === 'running' || summary.status === 'pending' ? (
         <p className="mt-2 text-[0.78rem] text-[var(--color-ink-faint)]">
-          The crew is working — {settled} of {total || 8} agents done.
+          {t.missions.card.working(settled, total || 8)}
         </p>
       ) : null}
 
@@ -51,13 +52,11 @@ export function MissionCard({ summary }: { summary: MissionSummary }) {
       </div>
 
       <div className="tabular mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[0.7rem] text-[var(--color-ink-faint)]">
-        <span>
-          {settled}/{total || 8} agents
-        </span>
-        <span>
-          {summary.runCount} run{summary.runCount === 1 ? '' : 's'}
-        </span>
-        {agentCounts.failed > 0 && <span className="text-[var(--color-bad)]">{agentCounts.failed} failed</span>}
+        <span>{t.missions.card.agents(settled, total || 8)}</span>
+        <span>{t.missions.card.runs(summary.runCount)}</span>
+        {agentCounts.failed > 0 && (
+          <span className="text-[var(--color-bad)]">{t.missions.card.failedAgents(agentCounts.failed)}</span>
+        )}
         <span className="ml-auto" title={absoluteTime(summary.createdAt)}>
           {relativeTime(summary.createdAt)}
         </span>

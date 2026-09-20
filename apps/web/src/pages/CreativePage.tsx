@@ -2,16 +2,17 @@ import { useMemo } from 'react';
 
 import { Icon, type IconName } from '../components/icons.tsx';
 import { Badge, EmptyState, ListSkeleton, Notice, PageHeader, Panel, SectionTitle } from '../components/primitives.tsx';
+import { PipelinePanel } from '../components/madre/PipelinePanel.tsx';
 import { useRecentMissions } from '../hooks/useRecentMissions.ts';
 import { absoluteTime, cleanPrompt, cx, excerpt } from '../lib/format.ts';
 import { href } from '../lib/router.tsx';
+import { t } from '../i18n/index.ts';
 
-const CREATE: { icon: IconName; name: string; body: string }[] = [
-  { icon: 'pen', name: 'New Design', body: 'Start from a blank page or a brief and lay out a screen, poster or brand sheet.' },
-  { icon: 'image', name: 'Image', body: 'Generate and edit images from a prompt.' },
-  { icon: 'video', name: 'Video', body: 'Turn a brief into a short clip and trim it.' },
-  { icon: 'layout', name: 'Canvas', body: 'A free-form board to arrange images, text and references together.' },
-];
+const CREATE: { icon: IconName; name: string; body: string }[] = t.creative.create.items.map((item) => ({
+  icon: item.icon as IconName,
+  name: item.name,
+  body: item.body,
+}));
 
 interface TemplatePreview {
   name: string;
@@ -21,12 +22,20 @@ interface TemplatePreview {
   layout: 'hero' | 'split' | 'grid' | 'stack';
 }
 
-const TEMPLATES: TemplatePreview[] = [
-  { name: 'Launch announcement', kind: 'Social post', swatch: 'from-cyan-500/30 to-violet-500/30', layout: 'hero' },
-  { name: 'Product card', kind: 'Marketplace', swatch: 'from-amber-500/30 to-rose-500/30', layout: 'split' },
-  { name: 'Brand sheet', kind: 'Identity', swatch: 'from-emerald-500/30 to-cyan-500/30', layout: 'grid' },
-  { name: 'Pitch slide', kind: 'Presentation', swatch: 'from-violet-500/30 to-fuchsia-500/30', layout: 'stack' },
+/** Visual treatment per template, paired by position with the catalogue entries. */
+const TEMPLATE_VISUALS: readonly { swatch: string; layout: TemplatePreview['layout'] }[] = [
+  { swatch: 'from-cyan-500/30 to-violet-500/30', layout: 'hero' },
+  { swatch: 'from-amber-500/30 to-rose-500/30', layout: 'split' },
+  { swatch: 'from-emerald-500/30 to-cyan-500/30', layout: 'grid' },
+  { swatch: 'from-violet-500/30 to-fuchsia-500/30', layout: 'stack' },
 ];
+
+const TEMPLATES: TemplatePreview[] = t.creative.templates.items.map((item, index) => ({
+  name: item.name,
+  kind: item.kind,
+  swatch: TEMPLATE_VISUALS[index]?.swatch ?? '',
+  layout: TEMPLATE_VISUALS[index]?.layout ?? 'hero',
+}));
 
 export function CreativePage() {
   const recent = useRecentMissions(20);
@@ -55,18 +64,23 @@ export function CreativePage() {
     <div className="space-y-6">
       <PageHeader
         icon="palette"
-        title="Creative"
-        description="The future creative suite: design, images, video and a shared canvas, all starting from what your missions have already decided."
+        title={t.creative.title}
+        description={t.creative.description}
       />
 
-      <Notice tone="preview" title="The editors are not built yet">
-        Nothing below can create or edit an asset today. The one working part is “Recent projects”, which lists the design
-        briefs your Design agent has already written.
+      <Notice tone="preview" title={t.creative.notice.title}>
+        {t.creative.notice.body}
       </Notice>
+
+      {/* -------------------------------------------------------------- Pipelines */}
+      <section>
+        <SectionTitle action={<Badge tone="ok">{t.creative.pipelines.badge}</Badge>}>{t.creative.pipelines.title}</SectionTitle>
+        <PipelinePanel />
+      </section>
 
       {/* ---------------------------------------------------------------- Create */}
       <section>
-        <SectionTitle>Create</SectionTitle>
+        <SectionTitle>{t.creative.create.title}</SectionTitle>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {CREATE.map((item) => (
             <Panel key={item.name} as="article" className="p-4">
@@ -74,7 +88,7 @@ export function CreativePage() {
                 <span className="grid h-11 w-11 place-items-center rounded-xl bg-[var(--color-tint)] text-[var(--color-ink-dim)] ring-1 ring-[var(--color-line)]">
                   <Icon name={item.icon} className="h-5 w-5" />
                 </span>
-                <Badge>Planned</Badge>
+                <Badge>{t.creative.create.planned}</Badge>
               </div>
               <h3 className="mt-3 text-[0.95rem] font-semibold text-[var(--color-ink)]">{item.name}</h3>
               <p className="mt-1 text-[0.78rem] leading-relaxed text-[var(--color-ink-faint)]">{item.body}</p>
@@ -85,7 +99,7 @@ export function CreativePage() {
 
       {/* ------------------------------------------------------------- Templates */}
       <section>
-        <SectionTitle action={<Badge tone="signal">Preview</Badge>}>Templates</SectionTitle>
+        <SectionTitle action={<Badge tone="signal">{t.creative.templates.badge}</Badge>}>{t.creative.templates.title}</SectionTitle>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {TEMPLATES.map((template) => (
             <Panel key={template.name} as="article" className="overflow-hidden">
@@ -103,14 +117,14 @@ export function CreativePage() {
 
       {/* -------------------------------------------------------- Recent projects */}
       <section>
-        <SectionTitle action={<Badge tone="ok">Live data</Badge>}>Recent projects</SectionTitle>
+        <SectionTitle action={<Badge tone="ok">{t.creative.recent.badge}</Badge>}>{t.creative.recent.title}</SectionTitle>
         {recent.loading && recent.missions.length === 0 ? (
           <ListSkeleton rows={2} />
         ) : briefs.length === 0 ? (
           <EmptyState
             icon="pen"
-            title="No design briefs yet"
-            body="When a mission completes, the Design agent's brief (user journey, interface principles, visual direction) appears here as a starting point."
+            title={t.creative.recent.empty.title}
+            body={t.creative.recent.empty.body}
           />
         ) : (
           <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
@@ -129,7 +143,7 @@ export function CreativePage() {
                     </span>
                     <span className="mt-0.5 line-clamp-2 text-[0.76rem] text-[var(--color-ink-dim)]">{brief.summary}</span>
                     <span className="mt-1 block text-[0.68rem] text-[var(--color-ink-faint)]">
-                      Design brief · {absoluteTime(brief.at)}
+                      {t.creative.recent.briefMeta(absoluteTime(brief.at))}
                     </span>
                   </span>
                 </a>

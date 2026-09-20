@@ -5,7 +5,7 @@
  *
  *  - `buildAssignment` — the short, stable description of what the agent was
  *    asked to do. Stored on the `mission_agents` row at creation time and shown
- *    in the UI, so it must be readable and must not depend on upstream output
+ *    in the UI (in Spanish), so it must be readable and must not depend on upstream output
  *    that does not exist yet.
  *
  *  - `renderPrompt` — the full text actually sent to the provider at execution
@@ -18,17 +18,17 @@ import type { AgentDefinition, FailedAgent, UpstreamResult } from '@acc/domain';
 export function buildAssignment(agent: AgentDefinition, missionPrompt: string): string {
   const scope =
     agent.kind === 'worker'
-      ? `Work the mission from the ${agent.name} angle.`
+      ? `Trabaja la misión desde el ángulo de ${agent.name}.`
       : agent.kind === 'qa'
-        ? 'Audit every specialist output produced in this run.'
-        : 'Merge every specialist output and the QA review into one deliverable.';
+        ? 'Audita todos los resultados de los especialistas producidos en esta ejecución.'
+        : 'Unifica todos los resultados de los especialistas y la revisión de calidad en un único entregable.';
 
   return [
-    `MISSION: ${missionPrompt.trim()}`,
+    `MISIÓN: ${missionPrompt.trim()}`,
     '',
     scope,
     '',
-    `EXPECTED DELIVERABLE: ${agent.deliverable}`,
+    `ENTREGABLE ESPERADO: ${agent.deliverable}`,
   ].join('\n');
 }
 
@@ -73,7 +73,7 @@ export function renderPrompt(input: RenderPromptInput): string {
         : agent.kind === 'qa'
           ? 'Audit the specialist output above. Find contradictions between agents, unstated assumptions, and missing work.'
           : 'Merge everything above into one coherent brief a human can act on immediately.'
-    }\n\nDELIVERABLE: ${agent.deliverable}\n\nRespond in Markdown. Be specific and concise. Do not restate the mission back.`,
+    }\n\nDELIVERABLE: ${agent.deliverable}\n\nRespond in Markdown. Be specific and concise. Do not restate the mission back. Write the answer in the language of the mission; default to Spanish.`,
   );
 
   return sections.join('\n\n================================\n\n');

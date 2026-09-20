@@ -5,6 +5,7 @@ import { MissionCard } from '../components/MissionCard.tsx';
 import { EmptyState, ErrorBanner, LinkButton, ListSkeleton, PageHeader, Segmented } from '../components/primitives.tsx';
 import { cleanPrompt } from '../lib/format.ts';
 import { href } from '../lib/router.tsx';
+import { t } from '../i18n/index.ts';
 import type { MissionStatus } from '../lib/api.ts';
 import { useMissions, useStats } from '../hooks/useApi.ts';
 
@@ -26,28 +27,28 @@ export function MissionsPage() {
       : items.filter((m) => `${cleanPrompt(m.title)} ${cleanPrompt(m.prompt)}`.toLowerCase().includes(needle));
 
   const options: { value: Filter; label: string; count?: number }[] = [
-    { value: 'all', label: 'All', ...(stats.data ? { count: stats.data.total } : {}) },
-    { value: 'running', label: 'Running', ...(stats.data ? { count: stats.data.running } : {}) },
-    { value: 'completed', label: 'Completed', ...(stats.data ? { count: stats.data.completed } : {}) },
-    { value: 'failed', label: 'Failed', ...(stats.data ? { count: stats.data.failed } : {}) },
+    { value: 'all', label: t.missions.list.filters.all, ...(stats.data ? { count: stats.data.total } : {}) },
+    { value: 'running', label: t.missions.list.filters.running, ...(stats.data ? { count: stats.data.running } : {}) },
+    { value: 'completed', label: t.missions.list.filters.completed, ...(stats.data ? { count: stats.data.completed } : {}) },
+    { value: 'failed', label: t.missions.list.filters.failed, ...(stats.data ? { count: stats.data.failed } : {}) },
   ];
 
   return (
     <div className="space-y-5">
       <PageHeader
         icon="target"
-        title="Missions"
-        description="Every mission you have launched, with its state, runs and result. Open one to watch the agents work."
+        title={t.missions.list.title}
+        description={t.missions.list.description}
         actions={
           <LinkButton href={href({ name: 'dashboard' })} variant="primary">
             <Icon name="plus" className="h-4 w-4" />
-            New mission
+            {t.missions.list.newMission}
           </LinkButton>
         }
       />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Segmented label="Filter missions by status" value={filter} onChange={setFilter} options={options} />
+        <Segmented label={t.missions.list.filterAria} value={filter} onChange={setFilter} options={options} />
 
         <div className="relative sm:w-64">
           <Icon
@@ -58,8 +59,8 @@ export function MissionsPage() {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search missions"
-            aria-label="Search missions"
+            placeholder={t.missions.list.searchLabel}
+            aria-label={t.missions.list.searchLabel}
             className="min-h-[44px] w-full rounded-xl border border-[var(--color-edge-bright)] bg-[var(--color-field)] py-2 pl-9 pr-3 text-[var(--color-ink)] placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-signal)]/55 focus:outline-none focus:ring-2 focus:ring-[var(--color-signal)]/30"
           />
         </div>
@@ -72,16 +73,16 @@ export function MissionsPage() {
       ) : items.length === 0 ? (
         <EmptyState
           icon="target"
-          title={filter === 'all' ? 'No missions yet' : `No ${filter} missions`}
+          title={filter === 'all' ? t.missions.list.emptyAll : t.missions.list.emptyFiltered(filter)}
           body={
             filter === 'all'
-              ? 'Launch your first mission from the Dashboard and it will show up here.'
-              : 'Try a different filter to see the rest of the history.'
+              ? t.missions.list.emptyAllBody
+              : t.missions.list.emptyFilteredBody
           }
           action={
             filter === 'all' ? (
               <LinkButton href={href({ name: 'dashboard' })} variant="primary">
-                Launch a mission
+                {t.missions.list.launch}
               </LinkButton>
             ) : undefined
           }
@@ -89,15 +90,15 @@ export function MissionsPage() {
       ) : visible.length === 0 ? (
         <EmptyState
           icon="search"
-          title="No matches"
-          body={`Nothing in the loaded missions matches “${query.trim()}”.`}
+          title={t.missions.list.noMatches}
+          body={t.missions.list.noMatchesBody(query.trim())}
         />
       ) : (
         <>
           <p className="tabular text-[0.72rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
             {needle === ''
-              ? `${missions.data?.total ?? items.length} mission${(missions.data?.total ?? items.length) === 1 ? '' : 's'}`
-              : `${visible.length} of ${items.length} shown`}
+              ? t.missions.list.total(missions.data?.total ?? items.length)
+              : t.missions.list.shownOf(visible.length, items.length)}
           </p>
           <div className="acc-stagger grid grid-cols-1 gap-2 lg:grid-cols-2">
             {visible.map((summary) => (

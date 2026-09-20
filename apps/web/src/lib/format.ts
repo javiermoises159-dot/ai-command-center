@@ -1,22 +1,29 @@
 import type { AgentStatus, MissionStatus } from '@acc/contracts';
 
-/** Compact relative time: "just now", "4m ago", "3d ago". */
+import { LOCALE, t } from '../i18n/index.ts';
+
+/** One decimal, with the locale's decimal separator ("1,5" in Spanish). */
+function oneDecimal(value: number): string {
+  return value.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+/** Compact relative time: "ahora mismo", "hace 4 min", "hace 3 días". */
 export function relativeTime(iso: string | null): string {
   if (iso === null) return '—';
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '—';
 
   const seconds = Math.round((Date.now() - then) / 1000);
-  if (seconds < 45) return 'just now';
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
-  if (seconds < 86_400) return `${Math.round(seconds / 3600)}h ago`;
-  if (seconds < 604_800) return `${Math.round(seconds / 86_400)}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (seconds < 45) return t.common.time.justNow;
+  if (seconds < 3600) return t.common.time.minutesAgo(Math.round(seconds / 60));
+  if (seconds < 86_400) return t.common.time.hoursAgo(Math.round(seconds / 3600));
+  if (seconds < 604_800) return t.common.time.daysAgo(Math.round(seconds / 86_400));
+  return new Date(iso).toLocaleDateString(LOCALE, { month: 'short', day: 'numeric' });
 }
 
 export function absoluteTime(iso: string | null): string {
   if (iso === null) return '—';
-  return new Date(iso).toLocaleString(undefined, {
+  return new Date(iso).toLocaleString(LOCALE, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -26,32 +33,33 @@ export function absoluteTime(iso: string | null): string {
 
 /** Wall-clock time with seconds, for timeline rows where order within a minute matters. */
 export function clockTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(iso).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-/** "Today", "Yesterday" or a short date: the group heading in the activity timeline. */
+/** "Hoy", "Ayer" or a short date: the group heading in the activity timeline. */
 export function dayLabel(iso: string, now: Date = new Date()): string {
   const date = new Date(iso);
   const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const diffDays = Math.round((startOf(now) - startOf(date)) / 86_400_000);
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  if (diffDays === 0) return t.common.time.today;
+  if (diffDays === 1) return t.common.time.yesterday;
+  return date.toLocaleDateString(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+/** Elapsed time with the unit spaced as Spanish writes it: "350 ms", "1,5 s", "2 min 5 s". */
 export function duration(ms: number | null): string {
   if (ms === null) return '—';
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  if (ms < 1000) return `${ms} ms`;
+  if (ms < 60_000) return `${oneDecimal(ms / 1000)} s`;
   const minutes = Math.floor(ms / 60_000);
   const seconds = Math.round((ms % 60_000) / 1000);
-  return `${minutes}m ${seconds}s`;
+  return `${minutes} min ${seconds} s`;
 }
 
 export function compactNumber(value: number): string {
-  if (value < 1000) return String(value);
-  if (value < 1_000_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`;
-  return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value < 1000) return value.toLocaleString(LOCALE);
+  if (value < 1_000_000) return value < 10_000 ? `${oneDecimal(value / 1000)} k` : `${Math.round(value / 1000)} k`;
+  return `${oneDecimal(value / 1_000_000)} M`;
 }
 
 /** Strip mock control directives from anything shown to the user. */
@@ -101,31 +109,31 @@ export interface StatusStyle {
 
 export const AGENT_STATUS_STYLES: Record<AgentStatus, StatusStyle> = {
   pending: {
-    label: 'Queued',
+    label: t.layout.status.pending,
     dot: 'bg-[var(--color-ink-faint)]',
     text: 'text-[var(--color-ink-faint)]',
     chip: 'bg-[var(--color-tint)] text-[var(--color-ink-dim)] ring-1 ring-[var(--color-line)]',
   },
   running: {
-    label: 'Working',
+    label: t.layout.status.running,
     dot: 'bg-[var(--color-signal)] shadow-[0_0_10px_2px_var(--color-signal)]',
     text: 'text-[var(--color-signal)]',
     chip: 'bg-cyan-600/10 text-cyan-800 ring-1 ring-cyan-700/30 dark:bg-cyan-400/10 dark:text-cyan-300 dark:ring-cyan-400/30',
   },
   completed: {
-    label: 'Done',
+    label: t.layout.status.completed,
     dot: 'bg-[var(--color-ok)]',
     text: 'text-[var(--color-ok)]',
     chip: 'bg-emerald-600/10 text-emerald-800 ring-1 ring-emerald-700/25 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/25',
   },
   failed: {
-    label: 'Failed',
+    label: t.layout.status.failed,
     dot: 'bg-[var(--color-bad)]',
     text: 'text-[var(--color-bad)]',
     chip: 'bg-rose-600/10 text-rose-800 ring-1 ring-rose-700/25 dark:bg-rose-400/10 dark:text-rose-300 dark:ring-rose-400/25',
   },
   skipped: {
-    label: 'Skipped',
+    label: t.layout.status.skipped,
     dot: 'bg-[var(--color-ink-faint)] opacity-50',
     text: 'text-[var(--color-ink-faint)]',
     chip: 'bg-[var(--color-tint)] text-[var(--color-ink-faint)] ring-1 ring-[var(--color-line)]',

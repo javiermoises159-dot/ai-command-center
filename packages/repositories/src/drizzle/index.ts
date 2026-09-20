@@ -35,6 +35,7 @@ import {
 import { missionAgents, missionRuns, missions, type Database } from '@acc/database';
 import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 
+import { DrizzleDocumentStore } from './documents.ts';
 import { toAgent, toMission, toRun, usageColumns } from './mappers.ts';
 
 /**
@@ -384,6 +385,7 @@ function buildSet(db: DbLike): RepositorySet {
 export function createDrizzleRepositories(db: Database, close: () => Promise<void>): Repositories {
   return {
     ...buildSet(db),
+    documents: new DrizzleDocumentStore(db),
     // Real atomicity: a throw inside `fn` rolls back every write it made.
     transaction: (fn) => db.transaction((tx) => fn(buildSet(tx))),
     close,

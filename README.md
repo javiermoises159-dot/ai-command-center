@@ -27,16 +27,28 @@ executions, driven asynchronously so an HTTP request never waits for the crew.
 - REST API with an OpenAPI 3.1 document and a typed client
 - React PWA with a live pipeline view, polling, and iPhone support
 
-**The one simulated part:** `MockProvider`. It generates structured, on-topic
-Markdown from the mission text but performs **no reasoning** — every result it
-produces is prefixed with a banner saying so. It exists to prove the
-orchestration machinery, not to advise anyone. Swap in a real provider and
-nothing else changes.
+**Real AI providers (Phase 2):** OpenAI, Anthropic and Google Gemini (Gemini
+API key from Google AI Studio, not Vertex) have real adapters. They are enabled
+purely by server-side environment variables (`OPENAI_API_KEY` + `OPENAI_MODEL`,
+`ANTHROPIC_API_KEY` + `ANTHROPIC_MODEL`, `GOOGLE_API_KEY` + `GEMINI_MODEL`). A
+provider without them is `Sin configurar` and is **never** answered by the
+simulation. Every result carries `provider`, `model`, `source` (`real`|`mock`) and
+`simulated`. See [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 
-**Not implemented (declared, not faked):** OpenAI, Anthropic, Gemini and
-OpenAI-compatible adapters exist as typed stubs. They appear in
-`GET /api/providers` as `planned`, and selecting one returns `503` with an
-explanation. They never silently fall back to the mock.
+**Not verified against the real vendors:** everything is tested offline with a
+fake HTTP layer. No live call to OpenAI, Anthropic or Gemini has been made from
+this repository yet; `pnpm e2e:real` does it once you provide keys and reports
+`BLOCKED` (not a failure) when you do not.
+
+**The simulated part:** `MockProvider`. It generates structured, on-topic
+Markdown from the mission text but performs **no reasoning** — every result it
+produces is prefixed with a banner saying so and marked `simulated`. It is used
+only when no real provider is configured at all (or a mission is pinned to it).
+
+**Not implemented (declared, not faked):** Ollama (needs a local machine) stays
+as the previously prepared provider, and the OpenAI-compatible adapter is a typed
+stub that appears as `planned`; selecting it returns `503` with an explanation.
+Neither silently falls back to the mock.
 
 ---
 
@@ -152,19 +164,49 @@ Zod or a vendor SDK, it stops compiling.
 
 ---
 
+## MADRE (mission engine)
+
+On top of the classic pipeline there is **MADRE** (`packages/madre`): it compiles
+the objective into a plan, routes each step to a provider, executes the plan as a
+DAG with retries, QA/judge, permissions, budgets, approvals and memory, and shows
+all of it in the app (Dashboard → Mission Command Center, mission *Plan &
+execution*). It is the default (`DEFAULT_MISSION_MODE=madre`); the classic
+pipeline stays available per mission and runs on the same engine, with the same
+routing, permission, cost, audit, trace, cancellation and crash-recovery
+guarantees (see *Classic mode* in `docs/MADRE.md`).
+
+The provider is still the simulated one, so MADRE reports low confidence and says
+so. Real AI providers, web search, publishing and media tools are **not
+connected**. Full, honest status, layers, API and how to connect a provider:
+[`docs/MADRE.md`](docs/MADRE.md).
+
+The interface is in Spanish — including everything the engine generates and every
+API message a person can read. Identifiers, routes and code stay in English. The
+text catalogue is `apps/web/src/i18n/es/`; another language is another folder of
+the same shape, with no new dependency.
+
+There is **no authentication yet**: every caller of the API is the same anonymous
+caller, which is the blocker for exposing the server beyond a trusted network.
+`RATE_LIMIT_MAX` is a guard rail against runaway clients, not a security control.
+
+---
+
 ## Project structure
 
 ```
 packages/
   domain/         Entities, state machine, agent catalog, ports, validation.
                   Zero dependencies — the rule that keeps the core testable.
-  providers/      AIProvider implementations: MockProvider + four planned stubs,
-                  behind a registry.
+  providers/      AIProvider implementations behind a registry: real OpenAI /
+                  Anthropic / Gemini adapters (real/), MockProvider, Ollama,
+                  and an OpenAI-compatible stub (planned/).
   orchestrator/   MissionService (lifecycle), MissionOrchestrator (execution),
                   InProcessJobQueue, crash recovery.
   repositories/   Port implementations: in-memory and Drizzle/PostgreSQL.
   database/       Drizzle schema, SQL migrations, migration runner, pool.
   contracts/      Zod schemas, OpenAPI 3.1 document, typed API client.
+  madre/          Mission engine: compiler, planner, router, execution engine,
+                  QA/judge, permissions, cost, memory, capability modules.
 
 apps/
   server/         config · container (composition root) · http/ (framework-
@@ -279,7 +321,7 @@ only to this API.
 | `DB_POOL_MAX` | `10` | Connection pool size |
 | `DB_AUTO_MIGRATE` | `true` | Apply pending migrations on boot |
 | `DB_SSL` | `false` | Needed by most hosted Postgres |
-| `AI_PROVIDER` | `mock` | Provider id; only `mock` is implemented |
+| `AI_PROVIDER` | `mock` | Default provider id: `mock`, `openai`, `anthropic`, `gemini` (a real one must be configured) |
 | `AI_MODEL` | first model | Model id |
 | `QUEUE_CONCURRENCY` | `1` | Concurrent mission runs |
 | `CONTINUE_ON_WORKER_FAILURE` | `true` | Keep going after a worker agent fails |
@@ -287,67 +329,55 @@ only to this API.
 | `MOCK_MIN_LATENCY_MS` | `250` | Simulated latency floor |
 | `MOCK_MAX_LATENCY_MS` | `900` | Simulated latency ceiling |
 
-Provider keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
-`OPENAI_COMPATIBLE_BASE_URL`) are listed in `.env.example` but **do nothing
-yet** — the adapters that would read them are stubs.
+Provider variables (server only; never sent to the browser, database, trace or
+audit): `OPENAI_API_KEY`/`OPENAI_MODEL`, `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL`/
+`ANTHROPIC_MAX_TOKENS`, `GOOGLE_API_KEY` (alias `GEMINI_API_KEY`)/`GEMINI_MODEL`,
+the optional `*_API_BASE_URL` overrides, `MADRE_DISABLED_PROVIDERS` and
+`MADRE_PRICES_JSON` (prices per 1k tokens; a model without a price is refused
+under a budget, never priced at $0). A provider needs **both** a key and a model
+to count as configured — there is no built-in default model. Details and the full
+list: `.env.example` and [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 
 ---
 
 ## Adding an AI provider
 
-The whole point of the architecture. Concretely, for OpenAI:
+The three vendors above already follow the pattern; use them as the template
+(`packages/providers/src/real/`).
 
-**1. Install the SDK**
+**1. Write the adapter.** Extend `RealProvider` (`real/real-provider.ts`) and
+implement the vendor-specific parts only: the request (URL, headers, body), how
+to read text / token usage / request id out of the response, and a cheap health
+probe. HTTP, timeout, `AbortSignal`, status → structured `ProviderError`
+classification, `Retry-After` and secret scrubbing are shared in `real/http.ts`.
+Use plain `fetch` (injectable for tests) and do **not** add a retry loop: the
+engine owns retries.
 
-```bash
-pnpm add openai --filter @acc/providers
-```
+**2. Declare its configuration.** Report `configuration()` honestly (key **and**
+model required, no default model) and mark the result `source: 'real'`,
+`simulated: false`.
 
-**2. Replace the stub** in `packages/providers/src/planned/openai.ts`. It
-currently extends `PlannedProvider`; make it implement `AIProvider` directly:
+**3. Add the env reader** in `real/env.ts` (`realProviderOptionsFromEnv`) and
+register the adapter in `createProviderRegistry` (`packages/providers/src/index.ts`).
+Add the provider id to `ProviderId` in `packages/domain` and its catalog entry
+(`packages/madre/src/registry/providers.ts`); leave a price `null` until you
+have confirmed it, and put real prices in `MADRE_PRICES_JSON`.
 
-```ts
-export class OpenAIProvider implements AIProvider {
-  readonly id: ProviderId = 'openai';
-  readonly label = 'OpenAI';
-  readonly availability = 'available' as const;
+**4. Test it offline** with the `fakeFetch` helper
+(`real/fixtures.test-support.ts`): success, 401, 429 + `Retry-After`, 5xx,
+timeout, malformed body, cancellation, and that the key never appears in an error.
 
-  constructor(private readonly apiKey: string) {}
-
-  listModels(): readonly ProviderModel[] {
-    return [{ id: 'gpt-4.1-mini', label: 'GPT-4.1 mini' }];
-  }
-
-  async execute(task: ProviderTask, signal?: AbortSignal): Promise<ProviderResult> {
-    // 1. call the vendor with task.systemPrompt + task.prompt
-    // 2. map the response onto ProviderResult:
-    //    { provider, model, text, usage, requestId, finishReason, latencyMs }
-    // 3. wrap any vendor error in ProviderFailedError — vendor error types
-    //    must not cross this boundary
-  }
-}
-```
-
-**3. Register it** in `createProviderRegistry`
-(`packages/providers/src/index.ts`), reading the key from the server config.
-
-**4. Select it** with `AI_PROVIDER=openai`, or per mission via `providerId` in
-the request body.
-
-Nothing in the orchestrator, the service, the API or the frontend changes. Each
-stub file carries its own implementation sketch in a comment, including which
-SDK call to make and which fields to map.
-
-`ProviderTask` also carries a structured `context` alongside the rendered
-`prompt`, so an adapter can use a vendor's native shape — multi-turn messages,
-cache breakpoints — instead of re-parsing a string.
+The router, circuit breaker, cost controller, engine, trace and audit need no
+change. `ProviderTask` also carries a structured `context`, so an adapter can use
+a vendor's native shape instead of re-parsing the rendered prompt.
 
 ---
 
 ## Testing
 
 ```bash
-pnpm test
+pnpm test        # everything, offline: no keys, no network, no database
+pnpm e2e:real    # OPT-IN. Real, billed calls; prints BLOCKED without keys
 ```
 
 Tests run on `node:test` through `tsx`. There is no test framework dependency —
@@ -383,7 +413,7 @@ responses, because a stale pipeline would be worse than an honest network error.
 
 Deliberately **not** built yet, to keep the core honest:
 
-- Real provider adapters (the seam is ready)
+- A live end-to-end run against the real OpenAI / Anthropic / Gemini APIs (needs your keys: `pnpm e2e:real`); Ollama and the OpenAI-compatible adapter
 - A durable queue — pg-boss on the existing Postgres is the obvious step
 - Streaming agent output (SSE) instead of polling
 - Parallel execution of independent agents; the pipeline is sequential by design

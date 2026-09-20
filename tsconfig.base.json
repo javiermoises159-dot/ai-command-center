@@ -32,6 +32,8 @@
       "@acc/repositories/*": ["./packages/repositories/src/*"],
       "@acc/database": ["./packages/database/src/index.ts"],
       "@acc/database/*": ["./packages/database/src/*"],
+      "@acc/madre": ["./packages/madre/src/index.ts"],
+      "@acc/madre/*": ["./packages/madre/src/*"],
       "@acc/contracts": ["./packages/contracts/src/index.ts"],
       "@acc/contracts/*": ["./packages/contracts/src/*"]
     }

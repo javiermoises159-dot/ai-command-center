@@ -1,5 +1,6 @@
 import { Layout } from './components/Layout.tsx';
 import { EmptyState, LinkButton } from './components/primitives.tsx';
+import { t } from './i18n/index.ts';
 import { href, useRouter } from './lib/router.tsx';
 import { ActivityPage } from './pages/ActivityPage.tsx';
 import { AgentsPage } from './pages/AgentsPage.tsx';
@@ -30,9 +31,9 @@ export function App() {
       {route.name === 'not-found' && (
         <EmptyState
           icon="compass"
-          title="Nothing here"
-          body={`No screen matches ${route.path}.`}
-          action={<LinkButton href={href({ name: 'dashboard' })}>Back to the dashboard</LinkButton>}
+          title={t.layout.notFound.title}
+          body={t.layout.notFound.body(route.path)}
+          action={<LinkButton href={href({ name: 'dashboard' })}>{t.layout.notFound.action}</LinkButton>}
         />
       )}
     </Layout>

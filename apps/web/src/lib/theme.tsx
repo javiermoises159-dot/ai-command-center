@@ -22,7 +22,9 @@ function readPreference(): ThemePreference {
   } catch {
     // Storage unavailable: fall through to the default.
   }
-  return 'dark';
+  // No stored choice: follow the device. On a phone that means the app matches
+  // the system appearance instead of forcing dark on someone using light mode.
+  return 'system';
 }
 
 function systemTheme(): ResolvedTheme {

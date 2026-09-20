@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="es" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <!-- Resolve the saved theme before first paint so the page never flashes
@@ -7,7 +7,7 @@
     <script>
       (function () {
         try {
-          var pref = window.localStorage.getItem('acc-theme') || 'dark';
+          var pref = window.localStorage.getItem('acc-theme') || 'system';
           var theme =
             pref === 'system'
               ? window.matchMedia('(prefers-color-scheme: light)').matches
@@ -26,7 +26,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover"
     />
-    <meta name="description" content="Multi-agent mission orchestration." />
+    <meta name="description" content="Orquestación multiagente de misiones." />
     <meta name="theme-color" content="#05070d" />
 
     <!-- iOS standalone / add-to-home-screen -->

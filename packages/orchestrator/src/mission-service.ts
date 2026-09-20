@@ -27,6 +27,7 @@ import {
   type Repositories,
   type RunDetail,
   type RunMissionInput,
+  type RunMode,
 } from '@acc/domain';
 import type { ProviderRegistry } from '@acc/providers';
 import { buildAssignment } from './prompts.ts';
@@ -43,6 +44,7 @@ export class MissionService {
   private readonly queue: JobQueue;
   private readonly clock: Clock;
   private readonly logger: Logger;
+  private readonly defaultMode: RunMode;
 
   constructor(deps: {
     repositories: Repositories;
@@ -50,12 +52,15 @@ export class MissionService {
     queue: JobQueue;
     logger: Logger;
     clock?: Clock;
+    /** Engine used when a request does not name one. Defaults to `classic`. */
+    defaultMode?: RunMode;
   }) {
     this.repos = deps.repositories;
     this.providers = deps.providers;
     this.queue = deps.queue;
     this.logger = deps.logger.child({ component: 'mission-service' });
     this.clock = deps.clock ?? systemClock;
+    this.defaultMode = deps.defaultMode ?? 'classic';
   }
 
   async create(input: CreateMissionInput): Promise<CreateMissionResult> {
@@ -77,7 +82,7 @@ export class MissionService {
       return { mission: { mission, runs: [] }, run: null };
     }
 
-    const run = await this.startRun(mission.id, mission.prompt, provider.id, model);
+    const run = await this.startRun(mission.id, mission.prompt, provider.id, model, input.mode ?? this.defaultMode);
     const detail = await this.requireDetail(mission.id);
     return { mission: detail, run };
   }
@@ -90,7 +95,7 @@ export class MissionService {
     if (active) throw new MissionAlreadyRunningError(missionId);
 
     const { provider, model } = this.providers.resolve(input.providerId, input.model);
-    return this.startRun(missionId, mission.prompt, provider.id, model);
+    return this.startRun(missionId, mission.prompt, provider.id, model, input.mode ?? this.defaultMode);
   }
 
   async get(missionId: MissionId): Promise<MissionDetail> {
@@ -135,6 +140,7 @@ export class MissionService {
     missionPrompt: string,
     providerId: string,
     model: string,
+    mode: RunMode,
   ): Promise<MissionRun> {
     const now = this.clock.now();
 
@@ -170,9 +176,9 @@ export class MissionService {
 
     // Enqueued only after the transaction commits, so a worker can never pick
     // up a run that was rolled back.
-    await this.queue.enqueue({ type: 'execute-run', runId: run.id, missionId });
+    await this.queue.enqueue({ type: 'execute-run', runId: run.id, missionId, mode });
 
-    this.logger.info('run queued', { missionId, runId: run.id, attempt: run.attempt });
+    this.logger.info('run queued', { missionId, runId: run.id, attempt: run.attempt, mode });
     return run;
   }
 

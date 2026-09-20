@@ -151,5 +151,55 @@ BEGIN
   PERFORM chk('the run is rolled back with it (no orphan run)', n, 0);
 END $$;
 
+-- MADRE documents: the semantics DrizzleDocumentStore relies on.
+DO $$
+DECLARE
+  m uuid := gen_random_uuid();
+  r uuid := gen_random_uuid();
+  n int;
+  t text;
+BEGIN
+  INSERT INTO missions (id, prompt, title) VALUES (m, 'madre contract', 'madre contract');
+  INSERT INTO mission_runs (id, mission_id, attempt, provider_id, model) VALUES (r, m, 1, 'mock', 'mock-1');
+
+  INSERT INTO madre_documents (kind, id, mission_id, run_id, payload) VALUES ('madre.plan', r::text, m, r, '{"v":1}');
+  -- upsert on (kind, id): the statement the adapter emits
+  INSERT INTO madre_documents (kind, id, mission_id, run_id, payload) VALUES ('madre.plan', r::text, m, r, '{"v":2}')
+    ON CONFLICT (kind, id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = now();
+  SELECT count(*) INTO n FROM madre_documents WHERE kind = 'madre.plan' AND id = r::text;
+  PERFORM chk('upsert keeps one document per (kind, id)', n, 1);
+  SELECT payload->>'v' INTO t FROM madre_documents WHERE kind = 'madre.plan' AND id = r::text;
+  PERFORM chk('upsert replaces the payload', t, '2');
+
+  -- same id under another kind is a different document
+  INSERT INTO madre_documents (kind, id, mission_id, run_id, payload) VALUES ('madre.run_state', r::text, m, r, '{}');
+  SELECT count(*) INTO n FROM madre_documents WHERE id = r::text;
+  PERFORM chk('kinds are separate namespaces', n, 2);
+
+  -- documents with no mission (settings, user-level memory) are allowed
+  INSERT INTO madre_documents (kind, id, scope, payload) VALUES ('madre.memory', 'u1', 'user', '{"title":"x"}');
+  SELECT count(*) INTO n FROM madre_documents WHERE kind = 'madre.memory' AND scope = 'user' AND mission_id IS NULL;
+  PERFORM chk('user-scope documents need no mission', n, 1);
+
+  BEGIN
+    INSERT INTO madre_documents (kind, id, payload) VALUES ('', 'x', '{}');
+  EXCEPTION WHEN check_violation THEN
+    RAISE NOTICE 'PASS  an empty kind is rejected';
+  END;
+
+  BEGIN
+    INSERT INTO madre_documents (kind, id, mission_id, payload) VALUES ('madre.audit', 'bad', gen_random_uuid(), '{}');
+  EXCEPTION WHEN foreign_key_violation THEN
+    RAISE NOTICE 'PASS  a document cannot point at a mission that does not exist';
+  END;
+
+  DELETE FROM missions WHERE id = m;
+  SELECT count(*) INTO n FROM madre_documents WHERE mission_id = m OR run_id = r;
+  PERFORM chk('deleting a mission removes its MADRE documents', n, 0);
+  SELECT count(*) INTO n FROM madre_documents WHERE kind = 'madre.memory' AND id = 'u1';
+  PERFORM chk('user-scope memory survives', n, 1);
+  DELETE FROM madre_documents;
+END $$;
+
 DROP FUNCTION chk(text, anyelement, anyelement);
 TRUNCATE missions CASCADE;

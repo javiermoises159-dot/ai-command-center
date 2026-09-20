@@ -121,8 +121,8 @@ describe('deriveTitle', () => {
   });
 
   it('never returns an empty string', () => {
-    assert.equal(deriveTitle('   '), 'Untitled mission');
-    assert.equal(deriveTitle('[fail:qa]'), 'Untitled mission');
+    assert.equal(deriveTitle('   '), 'Misión sin título');
+    assert.equal(deriveTitle('[fail:qa]'), 'Misión sin título');
   });
 });
 

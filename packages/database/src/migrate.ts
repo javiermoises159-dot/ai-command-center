@@ -83,7 +83,16 @@ export async function migrate(options: MigrateOptions): Promise<string[]> {
 }
 
 // `pnpm --filter @acc/database migrate`
-if (process.argv[1] !== undefined && import.meta.url === `file://${process.argv[1]}`) {
+//
+// Only when this file itself is the entry point. In the bundled server the
+// bundle IS the entry point, so `import.meta.url` alone matches too and the CLI
+// branch would run a second, concurrent migration next to the container's own —
+// on a fresh database the two race and one dies with a duplicate-type error.
+const isCliEntry =
+  process.argv[1] !== undefined &&
+  import.meta.url === `file://${process.argv[1]}` &&
+  /(^|[\\/])migrate\.(ts|js|mjs|cjs)$/.test(process.argv[1]);
+if (isCliEntry) {
   const connectionString = process.env['DATABASE_URL'];
   if (connectionString === undefined || connectionString === '') {
     console.error('DATABASE_URL is not set.');

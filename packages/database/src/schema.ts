@@ -1,5 +1,5 @@
 /**
- * Drizzle schema. Mirrors `migrations/0000_init.sql` exactly.
+ * Drizzle schema. Mirrors the SQL files in `migrations/` exactly.
  *
  * The SQL file is the source of truth for what runs against the database; this
  * file is the typed view of it. `drizzle-kit generate` produces new migrations
@@ -7,7 +7,7 @@
  */
 
 import { relations } from 'drizzle-orm';
-import { check, index, integer, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const missions = pgTable(
@@ -89,6 +89,28 @@ export const missionAgents = pgTable(
   ],
 );
 
+/** MADRE artefacts (`migrations/0001_madre_documents.sql`). */
+export const madreDocuments = pgTable(
+  'madre_documents',
+  {
+    kind: text('kind').notNull(),
+    id: text('id').notNull(),
+    missionId: uuid('mission_id').references(() => missions.id, { onDelete: 'cascade' }),
+    runId: uuid('run_id').references(() => missionRuns.id, { onDelete: 'cascade' }),
+    scope: text('scope'),
+    payload: jsonb('payload').$type<unknown>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ name: 'madre_documents_pkey', columns: [table.kind, table.id] }),
+    index('madre_documents_mission_idx').on(table.missionId, table.kind, table.createdAt),
+    index('madre_documents_run_idx').on(table.runId, table.kind, table.createdAt),
+    index('madre_documents_kind_idx').on(table.kind, table.createdAt.desc()),
+    check('madre_documents_kind_nonempty', sql`length(${table.kind}) > 0`),
+  ],
+);
+
 export const missionsRelations = relations(missions, ({ many }) => ({
   runs: many(missionRuns),
   agents: many(missionAgents),
@@ -107,3 +129,4 @@ export const missionAgentsRelations = relations(missionAgents, ({ one }) => ({
 export type MissionRow = typeof missions.$inferSelect;
 export type MissionRunRow = typeof missionRuns.$inferSelect;
 export type MissionAgentRow = typeof missionAgents.$inferSelect;
+export type MadreDocumentRow = typeof madreDocuments.$inferSelect;

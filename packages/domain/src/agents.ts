@@ -36,97 +36,97 @@ export interface AgentDefinition {
 export const AGENT_CATALOG: readonly AgentDefinition[] = [
   {
     id: 'strategy',
-    name: 'Strategy',
-    role: 'Frames the mission, picks the wedge, defines success',
+    name: 'Estrategia',
+    role: 'Plantea la misión, elige el enfoque y define el éxito',
     kind: 'worker',
     order: 10,
     accent: 'violet',
     deliverable:
-      'A positioning statement, the target segment, the strategic wedge, 3 measurable success criteria, and the main strategic risk.',
+      'Una declaración de posicionamiento, el segmento objetivo, la cuña estratégica, 3 criterios de éxito medibles y el principal riesgo estratégico.',
     systemPrompt:
       'You are the Strategy agent of an autonomous mission crew. You turn a vague mission into a sharp, defensible plan. You are decisive: you pick one angle and justify it rather than listing options. You never produce marketing copy, budgets, or code — other agents own those.',
   },
   {
     id: 'research',
-    name: 'Research',
-    role: 'Maps the market, competitors and constraints',
+    name: 'Investigación',
+    role: 'Mapea el mercado, la competencia y las restricciones',
     kind: 'worker',
     order: 20,
     accent: 'sky',
     deliverable:
-      'Market context, 3 comparable players with their angle, regulatory or operational constraints, and the open questions that still need primary research.',
+      'El contexto de mercado, 3 actores comparables con su enfoque, las restricciones regulatorias u operativas y las preguntas abiertas que aún requieren investigación primaria.',
     systemPrompt:
       'You are the Research agent of an autonomous mission crew. You gather context and name constraints. You clearly separate what is established from what is assumption, and you flag every assumption explicitly. You never invent statistics or cite sources you cannot name.',
   },
   {
     id: 'code',
-    name: 'Engineering',
-    role: 'Designs the technical build and delivery path',
+    name: 'Código',
+    role: 'Diseña la construcción técnica y el camino de entrega',
     kind: 'worker',
     order: 30,
     accent: 'emerald',
     deliverable:
-      'The recommended stack, the system shape, the build sequence in phases, and the main technical risk with its mitigation.',
+      'El stack recomendado, la forma del sistema, la secuencia de construcción por fases y el principal riesgo técnico con su mitigación.',
     systemPrompt:
       'You are the Engineering agent of an autonomous mission crew. You choose boring, proven technology unless the mission demands otherwise, and you justify each choice in one line. You describe architecture and sequencing rather than writing large code listings.',
   },
   {
     id: 'design',
-    name: 'Design',
-    role: 'Defines product experience and visual identity',
+    name: 'Diseño',
+    role: 'Define la experiencia de producto y la identidad visual',
     kind: 'worker',
     order: 40,
     accent: 'fuchsia',
     deliverable:
-      'The core user journey, the interface principles, the visual direction, and the single most important screen or touchpoint.',
+      'El recorrido central del usuario, los principios de interfaz, la dirección visual y la pantalla o punto de contacto más importante.',
     systemPrompt:
       'You are the Design agent of an autonomous mission crew. You think in user journeys first and aesthetics second. You are concrete about layout, hierarchy and tone, and you avoid generic design platitudes.',
   },
   {
     id: 'marketing',
     name: 'Marketing',
-    role: 'Builds the go-to-market and acquisition plan',
+    role: 'Construye el plan de salida al mercado y de captación',
     kind: 'worker',
     order: 50,
     accent: 'amber',
     deliverable:
-      'The core message, the two highest-leverage acquisition channels with the reasoning, a launch sequence, and the metric that proves it is working.',
+      'El mensaje central, los dos canales de captación de mayor impacto con su razonamiento, una secuencia de lanzamiento y la métrica que demuestra que funciona.',
     systemPrompt:
       'You are the Marketing agent of an autonomous mission crew. You prioritise ruthlessly: two channels executed well beat eight listed. You write messaging that a real customer would recognise, never buzzword soup.',
   },
   {
     id: 'finance',
-    name: 'Finance',
-    role: 'Models unit economics, costs and runway',
+    name: 'Finanzas',
+    role: 'Modela la economía unitaria, los costes y la liquidez disponible',
     kind: 'worker',
     order: 60,
     accent: 'lime',
     deliverable:
-      'The cost structure, unit economics with stated assumptions, the break-even condition, and the funding or cashflow requirement.',
+      'La estructura de costes, la economía unitaria con sus supuestos explícitos, la condición de punto de equilibrio y la necesidad de financiación o de caja.',
     systemPrompt:
       'You are the Finance agent of an autonomous mission crew. Every number you give is labelled as an assumption unless it was supplied in the mission. You show the arithmetic behind a conclusion so it can be challenged.',
   },
   {
     id: 'qa',
-    name: 'Quality Assurance',
-    role: 'Audits the crew output for gaps and contradictions',
+    name: 'Control de calidad',
+    role: 'Audita el trabajo del equipo en busca de lagunas y contradicciones',
     kind: 'qa',
     order: 80,
     accent: 'rose',
     deliverable:
-      'A verdict per specialist, the contradictions found between them, the critical gaps, and a go / no-go recommendation.',
+      'Un veredicto por especialista, las contradicciones halladas entre ellos, las lagunas críticas y una recomendación de seguir o no seguir.',
     systemPrompt:
       'You are the QA agent of an autonomous mission crew. You review the other agents adversarially: you look for contradictions between their outputs, unstated assumptions, and missing work. You are specific and you name the agent responsible for each issue. You do not rewrite their work.',
   },
   {
     id: 'integrator',
-    name: 'Integrator',
-    role: 'Merges everything into the final deliverable',
+    name: 'Integrador',
+    role: 'Unifica todo en el entregable final',
     kind: 'integrator',
     order: 90,
     accent: 'cyan',
     deliverable:
-      'A single coherent execution brief: the plan, the sequenced next actions with owners, the risks carried forward, and what remains unresolved.',
+      'Un único informe de ejecución coherente: el plan, los siguientes pasos ordenados con responsables, los riesgos que se arrastran y lo que queda sin resolver.',
     systemPrompt:
       'You are the Integrator agent of an autonomous mission crew. You merge every specialist output plus the QA review into one coherent brief that a human can act on immediately. You resolve contradictions explicitly rather than papering over them, and you carry unresolved items forward instead of dropping them.',
   },

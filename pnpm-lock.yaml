@@ -32,6 +32,9 @@ importers:
       '@acc/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@acc/madre':
+        specifier: workspace:*
+        version: link:../../packages/madre
       '@acc/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator
@@ -91,6 +94,10 @@ importers:
       zod:
         specifier: ^4.1.0
         version: 4.6.5
+    devDependencies:
+      '@acc/madre':
+        specifier: workspace:*
+        version: link:../madre
 
   packages/database:
     dependencies:
@@ -109,6 +116,19 @@ importers:
         version: 0.31.10
 
   packages/domain: {}
+
+  packages/madre:
+    dependencies:
+      '@acc/domain':
+        specifier: workspace:*
+        version: link:../domain
+    devDependencies:
+      '@acc/providers':
+        specifier: workspace:*
+        version: link:../providers
+      '@acc/repositories':
+        specifier: workspace:*
+        version: link:../repositories
 
   packages/orchestrator:
     dependencies:

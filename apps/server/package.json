@@ -11,6 +11,7 @@
     "@acc/contracts": "workspace:*",
     "@acc/database": "workspace:*",
     "@acc/domain": "workspace:*",
+    "@acc/madre": "workspace:*",
     "@acc/orchestrator": "workspace:*",
     "@acc/providers": "workspace:*",
     "@acc/repositories": "workspace:*",

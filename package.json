@@ -22,6 +22,7 @@
     "db:migrate": "pnpm --filter @acc/database migrate",
     "db:check": "pnpm --filter @acc/database check",
     "openapi": "pnpm --filter @acc/contracts openapi",
+    "e2e:real": "tsx scripts/e2e-real-providers.ts",
     "verify": "pnpm run typecheck && pnpm run test && pnpm run build"
   },
   "devDependencies": {

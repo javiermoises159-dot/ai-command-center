@@ -96,6 +96,59 @@ export interface AgentExecutionRepository {
   countByStatus(runId: RunId): Promise<Record<AgentStatus, number>>;
 }
 
+// ---------------------------------------------------------------------------
+// Document store
+// ---------------------------------------------------------------------------
+
+/**
+ * A JSON document with a little indexable metadata.
+ *
+ * MADRE keeps plans, run state, QA verdicts, cost records, approvals, memory
+ * entries and audit events here. One generic store instead of a table per
+ * artefact keeps the relational schema of missions/runs/agents untouched, and
+ * every kind is still queryable by mission, run, scope and time.
+ */
+export interface StoredDocument {
+  kind: string;
+  id: string;
+  missionId: string | null;
+  runId: string | null;
+  scope: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  /** Must be JSON-serialisable. */
+  payload: unknown;
+}
+
+export interface PutDocumentData {
+  kind: string;
+  id: string;
+  missionId?: string | null;
+  runId?: string | null;
+  scope?: string | null;
+  payload: unknown;
+  at: Date;
+}
+
+export interface DocumentQuery {
+  kind?: string | readonly string[];
+  missionId?: string;
+  runId?: string;
+  scope?: string;
+  limit?: number;
+  /** By creation time. Defaults to `asc`. */
+  order?: 'asc' | 'desc';
+}
+
+export interface DocumentStore {
+  /** Insert or replace by (kind, id). `createdAt` survives a replace. */
+  put(data: PutDocumentData): Promise<void>;
+  get(kind: string, id: string): Promise<StoredDocument | null>;
+  list(query?: DocumentQuery): Promise<StoredDocument[]>;
+  /** True when a document was removed. */
+  remove(kind: string, id: string): Promise<boolean>;
+}
+
 /** The three repositories, grouped so the composition root passes one object. */
 export interface RepositorySet {
   missions: MissionRepository;
@@ -104,6 +157,9 @@ export interface RepositorySet {
 }
 
 export interface Repositories extends RepositorySet {
+  /** MADRE artefacts. Not part of the mission transaction. */
+  documents: DocumentStore;
+
   /**
    * Run `fn` against a transactional view of the repositories. Throwing rolls
    * everything back.
@@ -130,7 +186,17 @@ export interface Repositories extends RepositorySet {
  * The only job type today. Kept as a discriminated union so adding
  * `{ type: 'retry-agent' }` later does not change the port's shape.
  */
-export type Job = { type: 'execute-run'; runId: RunId; missionId: MissionId };
+export type RunMode = 'classic' | 'madre';
+
+export type Job = {
+  type: 'execute-run';
+  runId: RunId;
+  missionId: MissionId;
+  /** Which engine executes the run. Absent means `classic` (the fixed pipeline). */
+  mode?: RunMode;
+  /** True when a paused MADRE run is being continued after an approval. */
+  resume?: boolean;
+};
 
 export type JobHandler = (job: Job) => Promise<void>;
 

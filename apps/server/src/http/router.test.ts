@@ -167,7 +167,7 @@ describe('POST /api/missions', () => {
     assert.equal(list.body.total, 0, 'a rejected provider must not leave a mission behind');
   });
 
-  it('rejects a provider that is declared but not implemented, with 503', async () => {
+  it('rejects a real provider that has no key or model, with 503, and does not fall back to the mock', async () => {
     const providers = new ProviderRegistry()
       .register(new MockProvider({ sleep: () => Promise.resolve() }), { makeDefault: true });
     const { OpenAIProvider } = await import('@acc/providers');
@@ -189,7 +189,10 @@ describe('POST /api/missions', () => {
     });
 
     assert.equal(response.status, 503);
-    assert.match((response.body as any).error.message, /not implemented/i);
+    const message = (response.body as any).error.message as string;
+    assert.match(message, /OPENAI_API_KEY/);
+    assert.match(message, /OPENAI_MODEL/);
+    assert.match(message, /nunca se sustituye por una simulación/i);
   });
 });
 
@@ -232,7 +235,7 @@ describe('GET /api/missions/:id', () => {
     assert.equal(body.status, 'failed');
     const marketing = body.runs[0].agents.find((a: any) => a.agentId === 'marketing');
     assert.equal(marketing.status, 'failed');
-    assert.match(marketing.error, /Simulated failure/);
+    assert.match(marketing.error, /Fallo simulado/);
     assert.ok(body.finalResult, 'the partial brief is still delivered');
   });
 });

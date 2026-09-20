@@ -36,16 +36,19 @@ export const createMissionRequestSchema = z.object({
   prompt: z
     .string()
     .trim()
-    .min(12, 'Must be at least 12 characters so the agents have something to work with.')
-    .max(4000, 'Must be at most 4000 characters.'),
+    .min(12, 'Debe tener al menos 12 caracteres para que los agentes tengan algo con lo que trabajar.')
+    .max(4000, 'Debe tener como máximo 4000 caracteres.'),
   providerId: z.string().trim().max(40).optional(),
   model: z.string().trim().max(120).optional(),
   autoStart: z.boolean().optional(),
+  /** Engine for the run. Omitted means the server default. */
+  mode: z.enum(['classic', 'madre']).optional(),
 });
 
 export const runMissionRequestSchema = z.object({
   providerId: z.string().trim().max(40).optional(),
   model: z.string().trim().max(120).optional(),
+  mode: z.enum(['classic', 'madre']).optional(),
 });
 
 export const listMissionsQuerySchema = z.object({
@@ -157,7 +160,7 @@ export const listAgentsResponseSchema = z.object({
 export const providerSchema = z.object({
   id: z.string(),
   label: z.string(),
-  availability: z.enum(['available', 'planned']),
+  availability: z.enum(['available', 'unconfigured', 'planned']),
   models: z.array(
     z.object({
       id: z.string(),
@@ -166,6 +169,12 @@ export const providerSchema = z.object({
     }),
   ),
   note: z.string().nullable(),
+  /** False for a declared stub with no implementation behind it. */
+  implemented: z.boolean(),
+  /** Has its credentials. Not the same as available, and not the same as healthy. */
+  configured: z.boolean(),
+  /** Names of the environment variables that configure it. Never their values. */
+  requires: z.array(z.string()),
 });
 
 export const listProvidersResponseSchema = z.object({

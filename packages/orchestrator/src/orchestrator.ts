@@ -142,10 +142,10 @@ export class MissionOrchestrator {
         // The catalog changed under a historical run. Record it, do not crash.
         await this.repos.agents.markFailed(
           agent.id,
-          `Agent "${agent.agentId}" is no longer in the catalog.`,
+          `El agente «${agent.agentId}» ya no está en el catálogo.`,
           this.clock.now(),
         );
-        failed.push({ agentId: agent.agentId, name: agent.name, error: 'Agent definition removed from catalog.' });
+        failed.push({ agentId: agent.agentId, name: agent.name, error: 'La definición del agente fue eliminada del catálogo.' });
         continue;
       }
 
@@ -207,7 +207,7 @@ export class MissionOrchestrator {
       error:
         failed.length === 0
           ? null
-          : `${failed.length} agent${failed.length === 1 ? '' : 's'} failed: ${failed.map((f) => f.name).join(', ')}.`,
+          : `${failed.length === 1 ? 'Falló 1 agente' : `Fallaron ${failed.length} agentes`}: ${failed.map((f) => f.name).join(', ')}.`,
     });
 
     // The mission carries the latest run's deliverable, even a partial one:

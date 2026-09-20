@@ -1,0 +1,105 @@
+/** Textos de la sección «Agentes» y del registro de especialistas MADRE. */
+export const agents = {
+  title: 'Agentes',
+  description:
+    'El equipo que trabaja en tus misiones, con su estado en vivo según tus misiones recientes, y el registro completo de especialistas con lo que cada uno puede hacer.',
+  loadingAria: 'Cargando agentes',
+  summary: (n: number) => `${n} ${n === 1 ? 'agente' : 'agentes'} · orden de ejecución`,
+  live: 'en vivo',
+  empty: {
+    title: 'Aún no hay ejecuciones',
+    body: 'Todos los agentes están listos. Lanza una misión desde el panel y aquí aparecerán su estado en vivo y sus contadores.',
+  },
+  kind: {
+    qa: 'QA',
+    integrator: 'Integrador',
+    worker: 'Especialista',
+  } as Record<string, string>,
+  delivers: 'Entrega: ',
+  capabilitiesAria: (name: string) => `Capacidades de ${name}`,
+  state: {
+    on: 'en',
+    idle: 'En reposo',
+    lastRun: 'última ejecución',
+    ready: 'Listo',
+    neverRun: 'Aún sin ejecutar',
+  },
+  metrics: {
+    done: 'Hechas',
+    failed: 'Fallidas',
+    avgTime: 'Tiempo medio',
+  },
+  countedOver: (n: number) => `Contabilizado sobre tus ${n} misiones más recientes`,
+
+  registry: {
+    title: 'Registro de especialistas',
+    loadingAria: 'Cargando el registro',
+    filterAria: 'Filtrar el registro',
+    filters: {
+      all: 'Todos',
+      active: 'Activos',
+      planned: 'Preparados, no activos',
+    },
+    status: {
+      active: 'Activo',
+      disabled: 'Deshabilitado',
+      planned: 'Preparado',
+    } as Record<string, string>,
+    risk: (level: string) => {
+      const names: Record<string, string> = { low: 'bajo', medium: 'medio', high: 'alto', critical: 'crítico' };
+      return `Riesgo ${names[level] ?? level}`;
+    },
+    rows: {
+      capabilities: 'Capacidades',
+      permissions: 'Permisos',
+      needsTools: 'Necesita herramientas',
+      prefers: 'Prefiere',
+    },
+    /** Niveles de proveedor preferidos por un agente. */
+    tiers: {
+      local: 'Local',
+      local_strong: 'Local potente',
+      external: 'Externo',
+      specialized: 'Especializado',
+      mock: 'Simulado',
+    } as Record<string, string>,
+    /** Capacidades declaradas por los agentes (códigos del servidor). */
+    capabilities: {
+      'strategy.positioning': 'Posicionamiento',
+      'strategy.prioritization': 'Priorización',
+      'strategy.assumptions': 'Suposiciones',
+      'research.market': 'Mercado',
+      'research.competitors': 'Competencia',
+      'research.regulatory': 'Normativa',
+      'research.audience': 'Audiencia',
+      'research.documents': 'Documentos',
+      'research.web': 'Búsqueda web',
+      'finance.unit_economics': 'Economía unitaria',
+      'finance.budget': 'Presupuesto',
+      'finance.experiment_cost': 'Coste de experimentos',
+      'marketing.go_to_market': 'Salida al mercado',
+      'marketing.campaign': 'Campañas',
+      'marketing.messaging': 'Mensaje',
+      'engineering.architecture': 'Arquitectura',
+      'engineering.build_plan': 'Plan de construcción',
+      'design.ux': 'Experiencia de usuario',
+      'design.brand': 'Marca',
+      'design.visual_brief': 'Brief visual',
+      'qa.review': 'Revisión de calidad',
+      'integration.brief': 'Brief integrado',
+      'legal.compliance': 'Cumplimiento legal',
+      'content.script': 'Guiones',
+      'content.video': 'Vídeo',
+      'content.voice': 'Voz en off',
+      'content.publish': 'Publicación',
+      'content.analytics': 'Analítica de contenido',
+      'sales.outreach': 'Prospección comercial',
+      'data.analysis': 'Análisis de datos',
+      'browser.automation': 'Automatización del navegador',
+      'computer.use': 'Uso del ordenador',
+      'automation.workflows': 'Flujos automáticos',
+      'trading.research': 'Investigación de trading',
+      'visual.reverse_engineering': 'Reconstrucción visual',
+    } as Record<string, string>,
+  },
+};

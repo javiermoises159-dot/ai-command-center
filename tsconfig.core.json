@@ -8,6 +8,7 @@
     "packages/domain/src/**/*.ts",
     "packages/providers/src/**/*.ts",
     "packages/orchestrator/src/**/*.ts",
+    "packages/madre/src/**/*.ts",
     "packages/repositories/src/memory/**/*.ts",
     "apps/server/src/http/**/*.ts",
     "apps/server/src/config.ts",

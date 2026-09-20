@@ -16,5 +16,8 @@
   "dependencies": {
     "@acc/domain": "workspace:*",
     "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@acc/madre": "workspace:*"
   }
 }

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { t } from '../i18n/index.ts';
 import { AGENT_STATUS_STYLES, MISSION_STATUS_STYLES, accentClass, cx } from '../lib/format.ts';
 import type { AgentStatus, MissionStatus } from '../lib/api.ts';
 import { Icon, type IconName } from './icons.tsx';
@@ -31,7 +32,7 @@ export function StatusChip({ status, kind = 'agent' }: { status: string; kind?: 
   return (
     <span
       className={cx(
-        'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.68rem] font-medium uppercase tracking-wider',
+        'inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.68rem] font-medium uppercase tracking-wider',
         style.chip,
       )}
     >
@@ -139,7 +140,7 @@ export function Skeleton({ className }: { className?: string }) {
 /** A stack of card-shaped skeletons, used while a list loads. */
 export function ListSkeleton({ rows = 3, className }: { rows?: number; className?: string }) {
   return (
-    <div className={cx('space-y-2', className)} role="status" aria-label="Loading">
+    <div className={cx('space-y-2', className)} role="status" aria-label={t.common.states.loading}>
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="panel space-y-3 px-3.5 py-3.5">
           <div className="flex items-center justify-between gap-4">
@@ -169,7 +170,7 @@ export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: (
             onClick={onRetry}
             className="mt-2 rounded-md bg-rose-500/15 px-2.5 py-1 text-xs font-medium hover:bg-rose-500/25"
           >
-            Try again
+            {t.common.actions.retry}
           </button>
         )}
       </div>
@@ -253,7 +254,9 @@ export function Badge({
   return (
     <span
       className={cx(
-        'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-wider ring-1',
+        // max-w-full lets a long label (Spanish runs longer than English) wrap
+        // inside its column instead of pushing the page sideways on a phone.
+        'inline-flex max-w-full shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-wider ring-1',
         style,
         className,
       )}

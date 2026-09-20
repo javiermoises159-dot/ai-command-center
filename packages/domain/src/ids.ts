@@ -21,7 +21,7 @@ export function deriveTitle(prompt: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 
-  if (cleaned.length === 0) return 'Untitled mission';
+  if (cleaned.length === 0) return 'Misión sin título';
 
   // Prefer cutting at the first sentence boundary when there is one early on.
   const sentenceEnd = cleaned.search(/[.!?](\s|$)/);

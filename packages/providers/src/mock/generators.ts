@@ -5,6 +5,8 @@
  * mission text, so the full pipeline (including the Integrator merging real
  * upstream content) can be exercised without any vendor API.
  *
+ * The generated text is in Spanish because it is shown to the user as-is.
+ *
  * It is a SIMULATION and says so in its own output. It performs no reasoning
  * and its content carries no analytical value — it exists to prove the
  * orchestration machinery, not to advise anyone.
@@ -15,35 +17,74 @@ import { createRng, hashString, pick, randomInt } from './rng.ts';
 
 /** Banner prepended to every simulated result so it can never be mistaken. */
 export const SIMULATION_NOTICE =
-  '> **Simulated output — MockProvider.** Generated locally with no AI model. ' +
-  'Structure is real, content is placeholder. Swap in a real provider to get actual analysis.';
+  '> **Resultado simulado — MockProvider.** Generado localmente, sin ningún modelo de IA. ' +
+  'La estructura es real, el contenido es de ejemplo. Conecta un proveedor real para obtener un análisis de verdad.';
 
-/** Pull the meaningful nouns out of a mission statement to reuse as subject matter. */
-function keywords(prompt: string): string[] {
-  const stop = new Set([
-    'the', 'a', 'an', 'and', 'or', 'but', 'for', 'to', 'of', 'in', 'on', 'at', 'by', 'with',
-    'from', 'into', 'about', 'want', 'wants', 'need', 'needs', 'quiero', 'para', 'una', 'uno',
-    'que', 'con', 'los', 'las', 'del', 'por', 'como', 'i', 'we', 'my', 'our', 'is', 'are',
-    'be', 'it', 'this', 'that', 'launch', 'build', 'create', 'make', 'start',
-  ]);
-  return prompt
-    .toLowerCase()
-    .replace(/\[[a-z]+:[^\]]*\]/gi, ' ')
-    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length > 2 && !stop.has(w))
-    .slice(0, 12);
+// ---------------------------------------------------------------------------
+// Topic extraction
+// ---------------------------------------------------------------------------
+
+/** Phrases that introduce a wish or an intention ("Quiero…", "I want to…"). */
+const INTENT_PREFIX =
+  /^(?:por favor|please|quiero|queremos|necesito|necesitamos|quisiera|quisiéramos|me gustaría|nos gustaría|voy a|vamos a|debo|debemos|busco|buscamos|planeo|planeamos|pretendo|pretendemos|ayúdame a|ayudame a|ayúdanos a|hay que|i want to|we want to|i need to|we need to|i would like to|we would like to|i'd like to|i want|we want|i need|we need|help me|let's|lets)(?=[\s,]|$)[\s,]*/i;
+
+/** Verbs that describe the act of starting something ("Lanzar…", "Launch…"). */
+const ACTION_VERB =
+  /^(?:poner en marcha|puesta en marcha de|set up|lanzar|lanzo|lanzamos|crear|creo|creamos|abrir|abro|abrimos|montar|monto|montamos|construir|construyo|construimos|desarrollar|desarrollo|diseñar|diseño|preparar|preparo|iniciar|inicio|empezar|empiezo|comenzar|comienzo|arrancar|arranco|fundar|fundo|organizar|organizo|planificar|planifico|hacer|hago|launch|launching|build|building|create|creating|open|opening|start|starting|make|making|develop|developing|design|designing|plan|planning|organize|organise|found|setup)(?=[\s,]|$)[\s,]*/i;
+
+/** Leading determiners, dropped so the topic reads as a bare noun phrase. */
+const LEADING_ARTICLE = /^(?:un|una|unos|unas|el|la|los|las|mi|mis|nuestro|nuestra|nuestros|nuestras|a|an|the|my|our|some)(?=\s)\s+/i;
+
+/** Small words that must not end a topic once it has been cut to length. */
+const TRAILING_STOP = new Set([
+  'de', 'del', 'en', 'y', 'e', 'o', 'u', 'para', 'por', 'con', 'sin', 'a', 'al', 'la', 'el', 'los', 'las', 'un', 'una',
+  'que', 'the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'at', 'for', 'to', 'with', 'by',
+]);
+
+const TOPIC_MAX_WORDS = 9;
+const TOPIC_FALLBACK = 'la misión indicada';
+
+/** Remove the `[fail:agente]` / `[slow:ms]` control directives. */
+function stripDirectives(prompt: string): string {
+  return prompt.replace(/\[[a-z]+:[^\]]*\]/gi, ' ');
 }
 
-function subject(prompt: string): string {
-  const words = keywords(prompt);
-  if (words.length === 0) return 'the mission';
-  return words.slice(0, 3).join(' ');
+/** Peel intent phrases, verbs and articles off the front until nothing more matches. */
+function stripLeadIn(sentence: string): string {
+  let text = sentence.trim();
+  for (let i = 0; i < 6; i += 1) {
+    const next = text.replace(INTENT_PREFIX, '').replace(ACTION_VERB, '').replace(LEADING_ARTICLE, '').trim();
+    if (next === text) break;
+    text = next;
+  }
+  return text;
+}
+
+/**
+ * The subject of a mission as a bare noun phrase, e.g. «Quiero lanzar una tienda
+ * online de cookies en Italia» -> «tienda online de cookies en Italia» and
+ * «Launch an online cookie store in Italy» -> «online cookie store in Italy».
+ *
+ * It is always used as a label ("Tema: …", between «»), never inside a sentence
+ * that needs gender or number agreement.
+ */
+export function extractTopic(prompt: string): string {
+  const cleaned = stripDirectives(prompt).replace(/\s+/g, ' ').trim();
+
+  for (const sentence of cleaned.split(/(?<=[.!?…])\s+|\n+/)) {
+    // A comma, colon, dash or bracket starts an aside: the topic is what precedes it.
+    const clause = (stripLeadIn(sentence.replace(/[.!?…]+$/, '')).split(/\s*[,;:()—–]\s*|\s+-\s+/)[0] ?? '').trim();
+    const words = clause.split(' ').filter((w) => w.length > 0).slice(0, TOPIC_MAX_WORDS);
+    while (words.length > 0 && TRAILING_STOP.has((words[words.length - 1] as string).toLowerCase())) words.pop();
+    const topic = words.join(' ');
+    if (topic.length >= 3) return topic;
+  }
+  return TOPIC_FALLBACK;
 }
 
 /** One-line echo of the mission so each agent's output is visibly on-topic. */
 function missionLine(prompt: string): string {
-  const cleaned = prompt.replace(/\[[a-z]+:[^\]]*\]/gi, '').replace(/\s+/g, ' ').trim();
+  const cleaned = stripDirectives(prompt).replace(/\s+/g, ' ').trim();
   return cleaned.length > 220 ? `${cleaned.slice(0, 217)}...` : cleaned;
 }
 
@@ -60,7 +101,7 @@ export interface GenerateOptions {
 export function generate(options: GenerateOptions): string {
   const { agentId, missionPrompt } = options;
   const rng = createRng(hashString(`${agentId}:${missionPrompt}`));
-  const topic = subject(missionPrompt);
+  const topic = extractTopic(missionPrompt);
 
   switch (agentId) {
     case 'strategy':
@@ -88,153 +129,161 @@ export function generate(options: GenerateOptions): string {
 
 function strategy(o: GenerateOptions, rng: () => number, topic: string): string {
   const wedge = pick(rng, [
-    'own the narrow segment first and expand outward',
-    'compete on delivery speed rather than breadth',
-    'win on trust and provenance, not price',
-    'bundle a service layer the incumbents will not staff',
+    'dominar primero el segmento más estrecho y ampliar desde ahí',
+    'competir por rapidez de entrega y no por amplitud de oferta',
+    'ganar por confianza y trazabilidad, no por precio',
+    'ofrecer una capa de servicio que los grandes no van a atender',
   ]);
   return [
     SIMULATION_NOTICE,
     '',
-    '## Mission framing',
-    `Mission under analysis: _${missionLine(o.missionPrompt)}_`,
+    '## Planteamiento de la misión',
+    `Misión analizada: _${missionLine(o.missionPrompt)}_`,
     '',
-    `The centre of gravity here is **${topic}**. Treating this as a broad play would spread the effort too thin, so the recommended posture is to ${wedge}.`,
+    `**Tema:** ${topic}`,
     '',
-    '## Target segment',
-    `- **Primary:** the narrowest group for whom ${topic} is an urgent problem rather than a nice-to-have.`,
-    '- **Secondary:** adjacent buyers reachable through the same channel once the primary segment is served.',
-    '- **Explicitly out of scope for now:** everyone else. Scope creep is the main failure mode at this stage.',
+    `El centro de gravedad está en **${topic}**. Tratarlo como una apuesta amplia dispersaría demasiado el esfuerzo, así que la postura recomendada es ${wedge}.`,
     '',
-    '## Strategic wedge',
-    `${capitalise(wedge)}. This is defensible because it requires operational commitment that a larger competitor is unlikely to copy quickly.`,
+    '## Segmento objetivo',
+    `- **Principal:** el grupo más acotado para el que «${topic}» es un problema urgente y no un simple extra.`,
+    '- **Secundario:** compradores cercanos a los que se llega por el mismo canal una vez atendido el segmento principal.',
+    '- **Fuera de alcance por ahora:** todos los demás. Ampliar el alcance sin control es el principal modo de fallo en esta etapa.',
     '',
-    '## Success criteria',
-    `1. First ${randomInt(rng, 10, 40)} real users or customers served end to end within ${randomInt(rng, 6, 14)} weeks.`,
-    `2. Repeat or retention rate above ${randomInt(rng, 25, 45)}% by the end of the first quarter of operation.`,
-    '3. A validated, repeatable acquisition motion — one channel that reliably produces demand.',
+    '## Cuña estratégica',
+    `${capitalise(wedge)}. Es defendible porque exige un compromiso operativo que un competidor mayor difícilmente copiará con rapidez.`,
     '',
-    '## Principal strategic risk',
-    `Demand for ${topic} may be shallower than assumed. Mitigation: validate with a paid pilot before committing to fixed costs.`,
+    '## Criterios de éxito',
+    `1. Atender de principio a fin a los primeros ${randomInt(rng, 10, 40)} usuarios o clientes reales en un máximo de ${randomInt(rng, 6, 14)} semanas.`,
+    `2. Tasa de repetición o retención superior al ${randomInt(rng, 25, 45)} % al cierre del primer trimestre de actividad.`,
+    '3. Un método de captación validado y repetible: un canal que genere demanda de forma fiable.',
+    '',
+    '## Riesgo estratégico principal',
+    `La demanda en torno a «${topic}» puede ser menos profunda de lo supuesto. Mitigación: validar con un piloto de pago antes de asumir costes fijos.`,
   ].join('\n');
 }
 
 function research(o: GenerateOptions, rng: () => number, topic: string): string {
   const constraint = pick(rng, [
-    'licensing and registration requirements in the target market',
-    'supply-chain lead times on the critical input',
-    'platform policy limits on the main distribution channel',
-    'data protection obligations covering customer records',
+    'requisitos de licencias y registro en el mercado objetivo',
+    'plazos de suministro del insumo crítico',
+    'límites de las políticas de la plataforma del canal principal de distribución',
+    'obligaciones de protección de datos sobre los registros de clientes',
   ]);
   return [
     SIMULATION_NOTICE,
     '',
-    '## Market context',
-    `The space around **${topic}** is best understood as a set of established players serving broad demand, with thin coverage at the specific end where this mission sits.`,
+    '## Contexto de mercado',
+    `**Tema:** ${topic}`,
     '',
-    '## Comparable players',
-    `| Player | Angle | Weak point |`,
-    `| --- | --- | --- |`,
-    `| Incumbent A | Broad catalogue, strong brand | Slow, impersonal service |`,
-    `| Challenger B | Price leadership | Thin margins, no differentiation |`,
-    `| Niche C | Deep specialisation | Limited reach, capacity-bound |`,
+    `El mercado en torno a **${topic}** se entiende mejor como un conjunto de actores consolidados que atienden una demanda amplia, con poca cobertura en el extremo concreto donde se sitúa esta misión.`,
     '',
-    '## Constraints to design around',
-    `- **Regulatory / operational:** ${constraint}.`,
-    '- **Capacity:** the model must work at small scale before it works at large scale.',
-    `- **Channel:** distribution for ${topic} concentrates in a small number of places, which raises platform dependency risk.`,
+    '## Actores comparables',
+    '| Actor | Enfoque | Punto débil |',
+    '| --- | --- | --- |',
+    '| Consolidado A | Oferta amplia y marca fuerte | Servicio lento e impersonal |',
+    '| Aspirante B | Liderazgo en precio | Márgenes ajustados y sin diferenciación |',
+    '| Especialista C | Especialización profunda | Alcance limitado y capacidad acotada |',
     '',
-    '## Assumptions (unverified)',
-    '- Demand volume is inferred from category reasoning, **not** measured.',
-    '- Competitor weak points are hypotheses drawn from their positioning, not from customer interviews.',
+    '## Restricciones a tener en cuenta',
+    `- **Regulatorias / operativas:** ${constraint}.`,
+    '- **Capacidad:** el modelo debe funcionar a pequeña escala antes de hacerlo a gran escala.',
+    `- **Canal:** la distribución de «${topic}» se concentra en pocos lugares, lo que aumenta el riesgo de depender de una plataforma.`,
     '',
-    '## Open questions requiring primary research',
-    '1. What do the first 20 target customers actually pay today, and to whom?',
-    '2. Which constraint above binds first at realistic volume?',
-    '3. Is the channel assumption stable, or is it a single point of failure?',
+    '## Supuestos (sin verificar)',
+    '- El volumen de demanda se infiere por razonamiento de categoría, **no** se ha medido.',
+    '- Los puntos débiles de los competidores son hipótesis basadas en su posicionamiento, no en entrevistas con clientes.',
+    '',
+    '## Preguntas abiertas que requieren investigación primaria',
+    '1. ¿Cuánto pagan hoy realmente los 20 primeros clientes objetivo y a quién?',
+    '2. ¿Cuál de las restricciones anteriores se activa primero con un volumen realista?',
+    '3. ¿Es estable la hipótesis sobre el canal o es un único punto de fallo?',
   ].join('\n');
 }
 
 function engineering(o: GenerateOptions, rng: () => number, topic: string): string {
-  const store = pick(rng, ['PostgreSQL', 'PostgreSQL with a read replica', 'PostgreSQL plus object storage']);
+  const store = pick(rng, ['PostgreSQL', 'PostgreSQL con réplica de lectura', 'PostgreSQL más almacenamiento de objetos']);
   return [
     SIMULATION_NOTICE,
     '',
-    '## Recommended stack',
-    `- **Runtime:** TypeScript end to end — one language across the build keeps a small team fast.`,
-    `- **Data:** ${store} — relational integrity matters more than exotic scale at this stage.`,
-    '- **Delivery:** a single deployable service plus a static frontend. Microservices would be premature.',
+    '## Stack recomendado',
+    `**Tema:** ${topic}`,
     '',
-    '## System shape',
+    '- **Entorno de ejecución:** TypeScript de extremo a extremo; un solo lenguaje en toda la construcción mantiene ágil a un equipo pequeño.',
+    `- **Datos:** ${store}; la integridad relacional importa más que una escala exótica en esta etapa.`,
+    '- **Despliegue:** un único servicio desplegable más un frontend estático. Los microservicios serían prematuros.',
+    '',
+    '## Forma del sistema',
     '```',
-    'client → api gateway → application service → datastore',
-    '                           ↓',
-    '                    background worker',
+    'cliente → pasarela de API → servicio de aplicación → almacén de datos',
+    '                                   ↓',
+    '                          proceso en segundo plano',
     '```',
-    `The write path stays synchronous and simple; anything slow relating to ${topic} moves to the worker so requests never block.`,
+    `La ruta de escritura se mantiene síncrona y simple; todo lo lento relacionado con «${topic}» pasa al proceso en segundo plano para que las peticiones nunca se bloqueen.`,
     '',
-    '## Build sequence',
-    `1. **Phase 1 (${randomInt(rng, 2, 4)} weeks):** data model, core write path, minimal UI.`,
-    `2. **Phase 2 (${randomInt(rng, 3, 6)} weeks):** background processing, notifications, admin views.`,
-    '3. **Phase 3:** hardening — observability, backups, load testing against realistic volume.',
+    '## Secuencia de construcción',
+    `1. **Fase 1 (${randomInt(rng, 2, 4)} semanas):** modelo de datos, ruta de escritura principal e interfaz mínima.`,
+    `2. **Fase 2 (${randomInt(rng, 3, 6)} semanas):** procesamiento en segundo plano, notificaciones y vistas de administración.`,
+    '3. **Fase 3:** consolidación: observabilidad, copias de seguridad y pruebas de carga con un volumen realista.',
     '',
-    '## Principal technical risk',
-    'The background worker becoming a hidden single point of failure. Mitigation: make jobs idempotent and retryable from day one, and surface queue depth as a first-class metric.',
+    '## Riesgo técnico principal',
+    'Que el proceso en segundo plano se convierta en un punto único de fallo oculto. Mitigación: diseñar las tareas para que sean idempotentes y reintentables desde el primer día, y mostrar la profundidad de la cola como una métrica de primer nivel.',
   ].join('\n');
 }
 
 function design(o: GenerateOptions, rng: () => number, topic: string): string {
-  const tone = pick(rng, ['warm and unfussy', 'precise and technical', 'confident and minimal', 'editorial and tactile']);
+  const tone = pick(rng, ['cálido y sin florituras', 'preciso y técnico', 'seguro y minimalista', 'editorial y táctil']);
   return [
     SIMULATION_NOTICE,
     '',
-    '## Core user journey',
-    `1. Arrive with a specific need around ${topic}.`,
-    '2. Understand within one screen whether this is for them.',
-    '3. Complete the primary action with no account friction.',
-    '4. Receive confirmation that feels like a commitment was made, not a form submitted.',
+    '## Recorrido central del usuario',
+    `**Tema:** ${topic}`,
     '',
-    '## Interface principles',
-    '- **One decision per screen.** Mobile is the default context, not an adaptation.',
-    '- **State is always visible.** The user should never wonder whether something is happening.',
-    '- **Progressive disclosure.** Depth is available but never the first thing shown.',
+    `1. La persona llega con una necesidad concreta relacionada con «${topic}».`,
+    '2. Entiende en una sola pantalla si esto es para ella.',
+    '3. Completa la acción principal sin fricción de cuenta.',
+    '4. Recibe una confirmación que se siente como un compromiso asumido, no como un formulario enviado.',
     '',
-    '## Visual direction',
-    `${capitalise(tone)}. High contrast for legibility in poor conditions, generous spacing, and a single accent colour used only for the primary action.`,
+    '## Principios de interfaz',
+    '- **Una decisión por pantalla.** El móvil es el contexto por defecto, no una adaptación.',
+    '- **El estado siempre visible.** Nadie debería preguntarse si algo está ocurriendo.',
+    '- **Revelación progresiva.** La profundidad está disponible, pero nunca es lo primero que se muestra.',
     '',
-    '## The screen that matters most',
-    `The confirmation state. It is the moment trust is either earned or lost, and it is almost always under-designed. It should restate exactly what will happen next and when.`,
+    '## Dirección visual',
+    `Estilo ${tone}. Alto contraste para leer bien en malas condiciones, espaciado generoso y un único color de acento reservado a la acción principal.`,
+    '',
+    '## La pantalla que más importa',
+    'El estado de confirmación. Es el momento en que la confianza se gana o se pierde, y casi siempre está poco cuidado. Debe repetir con exactitud qué ocurrirá a continuación y cuándo.',
   ].join('\n');
 }
 
 function marketing(o: GenerateOptions, rng: () => number, topic: string): string {
   const channels = pick<readonly [string, string]>(rng, [
-    ['local partnerships', 'organic short-form video'],
-    ['search intent capture', 'referral loops'],
-    ['community seeding', 'targeted paid social'],
-    ['direct outbound', 'content built for search'],
+    ['alianzas locales', 'vídeo corto orgánico'],
+    ['captación por intención de búsqueda', 'bucles de recomendación'],
+    ['siembra en comunidades', 'publicidad social segmentada de pago'],
+    ['prospección directa', 'contenido pensado para buscadores'],
   ]);
   return [
     SIMULATION_NOTICE,
     '',
-    '## Core message',
-    `> The fastest way to get ${topic} done properly, without the usual friction.`,
+    '## Mensaje central',
+    `> ${capitalise(topic)}, sin fricciones y a la primera.`,
     '',
-    'The message leads with the outcome, not the mechanism. Customers buy the resolved problem.',
+    'El mensaje habla del resultado, no del mecanismo. Los clientes compran el problema resuelto.',
     '',
-    '## Two channels, chosen deliberately',
-    `1. **${capitalise(channels[0])}** — highest intent per unit of effort at this stage; it reaches people already looking.`,
-    `2. **${capitalise(channels[1])}** — compounds over time and reduces dependence on paid acquisition.`,
+    '## Dos canales, elegidos a propósito',
+    `1. **${capitalise(channels[0])}**: la mayor intención por unidad de esfuerzo en esta etapa; llega a personas que ya están buscando.`,
+    `2. **${capitalise(channels[1])}**: se acumula con el tiempo y reduce la dependencia de la captación de pago.`,
     '',
-    'Everything else is deferred. Two channels executed well beat six run badly.',
+    'Todo lo demás se aplaza. Dos canales bien ejecutados valen más que seis mal llevados.',
     '',
-    '## Launch sequence',
-    `- **Weeks 1–2:** message testing with ${randomInt(rng, 15, 40)} target customers before any spend.`,
-    '- **Weeks 3–4:** soft launch on channel 1 only, measuring conversion honestly.',
-    '- **Week 5 onward:** layer in channel 2 once channel 1 has a stable baseline.',
+    '## Secuencia de lanzamiento',
+    `- **Semanas 1–2:** prueba del mensaje con ${randomInt(rng, 15, 40)} clientes objetivo antes de gastar nada.`,
+    '- **Semanas 3–4:** lanzamiento suave solo en el canal 1, midiendo la conversión con honestidad.',
+    '- **Semana 5 en adelante:** incorporar el canal 2 cuando el canal 1 tenga una base estable.',
     '',
-    '## The metric that matters',
-    `Cost per **retained** customer, not cost per lead. A cheap lead that never returns is a loss disguised as a win.`,
+    '## La métrica que importa',
+    'El coste por cliente **retenido**, no el coste por contacto. Un contacto barato que nunca vuelve es una pérdida disfrazada de victoria.',
   ].join('\n');
 }
 
@@ -249,32 +298,34 @@ function finance(o: GenerateOptions, rng: () => number, topic: string): string {
   return [
     SIMULATION_NOTICE,
     '',
-    '## Assumption set',
-    'Every figure below is an **assumption for modelling purposes**. None was supplied in the mission or measured.',
+    '## Conjunto de supuestos',
+    `**Tema:** ${topic}`,
     '',
-    `| Item | Assumed value |`,
-    `| --- | --- |`,
-    `| Average revenue per order | ${price} |`,
-    `| Direct cost per order | ${cogs} |`,
-    `| Customer acquisition cost | ${cac} |`,
-    `| Fixed monthly cost | ${fixed} |`,
+    'Todas las cifras siguientes son **supuestos a efectos de modelado**. Ninguna venía en la misión ni se ha medido. Se expresan en una misma unidad monetaria.',
     '',
-    '## Unit economics',
-    `Contribution per order = ${price} − ${cogs} − ${cac} = **${contribution}**.`,
+    '| Concepto | Valor supuesto |',
+    '| --- | --- |',
+    `| Ingreso medio por pedido | ${price} |`,
+    `| Coste directo por pedido | ${cogs} |`,
+    `| Coste de captación de cliente | ${cac} |`,
+    `| Coste fijo mensual | ${fixed} |`,
+    '',
+    '## Economía unitaria',
+    `Contribución por pedido = ${price} − ${cogs} − ${cac} = **${contribution}**.`,
     contribution > 0
-      ? `Each order contributes ${contribution} toward fixed costs.`
-      : 'Contribution is **negative**: the model does not work at these assumptions and pricing or cost must change before launch.',
+      ? `Cada pedido aporta ${contribution} a cubrir los costes fijos.`
+      : 'La contribución es **negativa**: con estos supuestos el modelo no funciona y hay que cambiar el precio o el coste antes del lanzamiento.',
     '',
-    '## Break-even',
+    '## Punto de equilibrio',
     contribution > 0
-      ? `${breakeven} orders per month covers the ${fixed} fixed base. Below that, ${topic} burns cash every month.`
-      : 'No break-even exists at these assumptions.',
+      ? `${breakeven} pedidos al mes cubren la base fija de ${fixed}. Por debajo de ese volumen, «${topic}» consume caja cada mes.`
+      : 'Con estos supuestos no existe punto de equilibrio.',
     '',
-    '## Funding requirement',
-    `Assuming ${randomInt(rng, 4, 9)} months to reach break-even volume, the cash requirement is roughly ${fixed * randomInt(rng, 4, 9)} plus one-off setup costs. Raise or reserve more than the model says; the model is optimistic by construction.`,
+    '## Necesidad de financiación',
+    `Suponiendo ${randomInt(rng, 4, 9)} meses hasta alcanzar el volumen de equilibrio, la necesidad de caja ronda ${fixed * randomInt(rng, 4, 9)} más los costes puntuales de puesta en marcha. Conviene reunir o reservar más de lo que indica el modelo: es optimista por construcción.`,
     '',
-    '## Sensitivity',
-    'The result is most sensitive to acquisition cost. A 50% miss there erases the contribution margin entirely.',
+    '## Sensibilidad',
+    'El resultado es más sensible al coste de captación. Una desviación del 50 % ahí elimina por completo el margen de contribución.',
   ].join('\n');
 }
 
@@ -283,50 +334,50 @@ function finance(o: GenerateOptions, rng: () => number, topic: string): string {
 // ---------------------------------------------------------------------------
 
 function qa(o: GenerateOptions, rng: () => number): string {
-  const lines: string[] = [SIMULATION_NOTICE, '', '## Verdict per specialist', ''];
+  const lines: string[] = [SIMULATION_NOTICE, '', '## Veredicto por especialista', ''];
 
   for (const item of o.upstream) {
     const verdict = pick(rng, [
-      'Sound, proceeds on stated assumptions.',
-      'Usable, but the reasoning is thinner than it looks.',
-      'Directionally right; specifics need validation.',
+      'Sólido; avanza con los supuestos indicados.',
+      'Utilizable, pero el razonamiento es más frágil de lo que parece.',
+      'Va en buena dirección; los detalles requieren validación.',
     ]);
     lines.push(`- **${item.name}** — ${verdict}`);
   }
 
   for (const item of o.failed) {
-    lines.push(`- **${item.name}** — ❌ **did not produce output.** ${item.error}`);
+    lines.push(`- **${item.name}** — ❌ **no produjo resultado.** ${item.error}`);
   }
 
-  lines.push('', '## Contradictions found', '');
+  lines.push('', '## Contradicciones encontradas', '');
   if (o.upstream.length >= 2) {
     lines.push(
-      '- Finance assumes an acquisition cost that Marketing never committed to; the two were produced independently and were never reconciled.',
-      '- Strategy narrows the segment while Research describes the broad market. The narrow read should win, but the documents currently disagree.',
+      '- Finanzas asume un coste de captación con el que Marketing nunca se comprometió; ambos informes se produjeron por separado y nunca se conciliaron.',
+      '- Estrategia acota el segmento mientras Investigación describe el mercado amplio. Debería prevalecer la lectura acotada, pero los documentos hoy no coinciden.',
     );
   } else {
-    lines.push('- Too few specialist outputs to cross-check meaningfully.');
+    lines.push('- Hay pocos resultados de especialistas para contrastarlos de forma significativa.');
   }
 
-  lines.push('', '## Critical gaps', '');
+  lines.push('', '## Lagunas críticas', '');
   const gaps = [
-    'No agent validated demand with a real customer. Every downstream number inherits that gap.',
-    'Timeline estimates are not reconciled against the funding runway.',
+    'Ningún agente validó la demanda con un cliente real. Todas las cifras posteriores heredan esa laguna.',
+    'Las estimaciones de plazos no se han conciliado con la liquidez disponible.',
   ];
   if (o.failed.length > 0) {
     gaps.unshift(
-      `**${o.failed.map((f) => f.name).join(', ')} produced nothing**, so the brief is incomplete in ${o.failed.length === 1 ? 'that area' : 'those areas'}.`,
+      `**${o.failed.map((f) => f.name).join(', ')} no produjo nada**, así que el informe está incompleto en ${o.failed.length === 1 ? 'esa área' : 'esas áreas'}.`,
     );
   }
   lines.push(...gaps.map((g) => `- ${g}`));
 
   lines.push(
     '',
-    '## Recommendation',
+    '## Recomendación',
     '',
     o.failed.length > 0
-      ? '**No-go as it stands.** The brief has a hole in it. Re-run the failed agents, or accept the gap explicitly and document who will cover that work manually.'
-      : '**Conditional go.** Proceed to a paid validation pilot, but treat every financial figure as unvalidated until real demand data exists.',
+      ? '**No seguir adelante tal como está.** Al informe le falta una pieza. Vuelve a ejecutar los agentes que fallaron, o acepta la laguna de forma explícita y deja documentado quién cubrirá ese trabajo a mano.'
+      : '**Seguir con condiciones.** Pasar a un piloto de validación de pago, pero tratar toda cifra financiera como no validada hasta que existan datos reales de demanda.',
   );
 
   return lines.join('\n');
@@ -339,20 +390,20 @@ function integrator(o: GenerateOptions, rng: () => number, topic: string): strin
   const lines: string[] = [
     SIMULATION_NOTICE,
     '',
-    `# Execution brief: ${topic}`,
+    `# Informe de ejecución: ${capitalise(topic)}`,
     '',
-    `**Mission:** ${missionLine(o.missionPrompt)}`,
+    `**Misión:** ${missionLine(o.missionPrompt)}`,
     '',
-    `Assembled from ${specialists.length} specialist ${specialists.length === 1 ? 'report' : 'reports'}` +
-      (qaReview ? ' plus the QA review' : '') +
-      (o.failed.length > 0 ? `, with ${o.failed.length} agent ${o.failed.length === 1 ? 'failure' : 'failures'}` : '') +
+    `Elaborado a partir de ${specialists.length} ${specialists.length === 1 ? 'informe de especialista' : 'informes de especialistas'}` +
+      (qaReview ? ' más la revisión de calidad' : '') +
+      (o.failed.length > 0 ? `, con ${o.failed.length} ${o.failed.length === 1 ? 'fallo de agente' : 'fallos de agentes'}` : '') +
       '.',
     '',
-    '## The plan in one paragraph',
+    '## El plan en un párrafo',
     '',
-    `Attack **${topic}** through the narrowest viable segment, validate demand with a paid pilot before committing fixed cost, and build the minimum technical surface that lets a real transaction complete end to end. Two acquisition channels, not six. Every financial figure in this brief is an assumption until the pilot produces data.`,
+    `Abordar **${topic}** a través del segmento viable más estrecho, validar la demanda con un piloto de pago antes de asumir costes fijos y construir la superficie técnica mínima que permita completar una transacción real de principio a fin. Dos canales de captación, no seis. Toda cifra financiera de este informe es un supuesto hasta que el piloto aporte datos.`,
     '',
-    '## Contributing agents',
+    '## Agentes participantes',
     '',
   ];
 
@@ -361,33 +412,33 @@ function integrator(o: GenerateOptions, rng: () => number, topic: string): strin
   }
 
   if (o.failed.length > 0) {
-    lines.push('## Gaps carried forward', '');
+    lines.push('## Lagunas que se arrastran', '');
     for (const f of o.failed) {
-      lines.push(`- **${f.name} did not run.** ${f.error} This area is uncovered and must be handled manually or by re-running the mission.`);
+      lines.push(`- **${f.name} no se ejecutó.** ${f.error} Esta área queda sin cubrir y debe resolverse a mano o volviendo a ejecutar la misión.`);
     }
     lines.push('');
   }
 
   lines.push(
-    '## Sequenced next actions',
+    '## Siguientes pasos ordenados',
     '',
-    `1. **Validate demand** — interview ${randomInt(rng, 15, 30)} target customers and take pre-orders. Owner: Strategy.`,
-    '2. **Lock the assumption set** — replace every modelled figure with a measured one. Owner: Finance.',
-    '3. **Build the transaction path** — one complete flow, nothing else. Owner: Engineering.',
-    '4. **Run one channel** — measure cost per retained customer, not leads. Owner: Marketing.',
+    `1. **Validar la demanda** — entrevistar a ${randomInt(rng, 15, 30)} clientes objetivo y recoger preventas. Responsable: Estrategia.`,
+    '2. **Fijar los supuestos** — sustituir cada cifra modelada por una medida. Responsable: Finanzas.',
+    '3. **Construir el recorrido de la transacción** — un único flujo completo, nada más. Responsable: Código.',
+    '4. **Activar un canal** — medir el coste por cliente retenido, no por contacto. Responsable: Marketing.',
     '',
-    '## Risks carried forward',
+    '## Riesgos que se arrastran',
     '',
-    '- Demand is assumed, not proven. This is the risk that invalidates everything else.',
-    '- Acquisition cost drives the entire financial model and has the widest error bar.',
-    '- Channel concentration creates a single point of failure in distribution.',
+    '- La demanda se da por supuesta, no está probada. Es el riesgo que invalida todos los demás.',
+    '- El coste de captación determina todo el modelo financiero y tiene el mayor margen de error.',
+    '- La concentración en pocos canales crea un punto único de fallo en la distribución.',
     '',
-    '## Unresolved',
+    '## Sin resolver',
     '',
     qaReview
-      ? '- The contradictions QA raised between Finance and Marketing assumptions are **not resolved in this brief**. They need a single owner to reconcile before spend begins.'
-      : '- No QA review was available, so this brief is unaudited.',
-    '- No agent has primary market data. Treat this document as a plan to get that data, not as evidence.',
+      ? '- Las contradicciones que señaló la revisión de calidad entre los supuestos de Finanzas y de Marketing **no están resueltas en este informe**. Necesitan un único responsable que las concilie antes de empezar a gastar.'
+      : '- No hubo revisión de calidad, así que este informe no ha sido auditado.',
+    '- Ningún agente dispone de datos primarios de mercado. Trata este documento como un plan para conseguir esos datos, no como evidencia.',
   );
 
   return lines.join('\n');
@@ -413,11 +464,12 @@ function firstSubstantiveParagraph(markdown: string): string {
       !line.startsWith('>') &&
       !line.startsWith('#') &&
       !line.startsWith('|') &&
-      !line.startsWith('```')
+      !line.startsWith('```') &&
+      !line.startsWith('**Tema:**')
     );
   });
 
   const isListItem = (line: string) => /^([-*+]\s|\d+[.)]\s)/.test(line);
 
-  return candidates.find((line) => !isListItem(line)) ?? candidates[0] ?? '_No summarisable content._';
+  return candidates.find((line) => !isListItem(line)) ?? candidates[0] ?? '_No hay contenido que resumir._';
 }

@@ -21,6 +21,28 @@ import {
   runMissionResponseSchema,
   statsResponseSchema,
 } from './schemas.ts';
+import {
+  cancelMissionResponseSchema,
+  madreActivityResponseSchema,
+  madreAgentsResponseSchema,
+  madreApprovalsResponseSchema,
+  madreBudgetRequestSchema,
+  madreBudgetResponseSchema,
+  madreCompileRequestSchema,
+  madreCompileResponseSchema,
+  madreDecisionRequestSchema,
+  madreDecisionResponseSchema,
+  madreForgetResponseSchema,
+  madreMemoryResponseSchema,
+  madreOverviewSchema,
+  madrePermissionsResponseSchema,
+  madreProvidersResponseSchema,
+  madreRememberRequestSchema,
+  madreRememberResponseSchema,
+  madreSnapshotSchema,
+  madreTraceResponseSchema,
+  madreToolsResponseSchema,
+} from './madre.ts';
 
 const SCHEMAS = {
   CreateMissionRequest: createMissionRequestSchema,
@@ -34,6 +56,26 @@ const SCHEMAS = {
   StatsResponse: statsResponseSchema,
   HealthResponse: healthResponseSchema,
   ApiError: apiErrorSchema,
+  MadreOverview: madreOverviewSchema,
+  MadreAgents: madreAgentsResponseSchema,
+  MadreProviders: madreProvidersResponseSchema,
+  MadreTools: madreToolsResponseSchema,
+  MadrePermissions: madrePermissionsResponseSchema,
+  MadreActivity: madreActivityResponseSchema,
+  MadreCompileRequest: madreCompileRequestSchema,
+  MadreCompileResponse: madreCompileResponseSchema,
+  MadreMemory: madreMemoryResponseSchema,
+  MadreRememberRequest: madreRememberRequestSchema,
+  MadreRememberResponse: madreRememberResponseSchema,
+  MadreForget: madreForgetResponseSchema,
+  MadreBudgetRequest: madreBudgetRequestSchema,
+  MadreBudget: madreBudgetResponseSchema,
+  MadreApprovals: madreApprovalsResponseSchema,
+  MadreDecisionRequest: madreDecisionRequestSchema,
+  MadreDecision: madreDecisionResponseSchema,
+  MadreSnapshot: madreSnapshotSchema,
+  MadreTrace: madreTraceResponseSchema,
+  CancelMissionResponse: cancelMissionResponseSchema,
 } as const;
 
 function ref(name: keyof typeof SCHEMAS) {
@@ -51,7 +93,7 @@ function errorResponse(description: string) {
 export function buildOpenApiDocument(version = '0.1.0'): Record<string, unknown> {
   const schemas: Record<string, unknown> = {};
   for (const [name, schema] of Object.entries(SCHEMAS)) {
-    schemas[name] = z.toJSONSchema(schema, { target: 'draft-2020-12', io: 'output' });
+    schemas[name] = z.toJSONSchema(schema, { target: 'draft-2020-12', io: 'output', unrepresentable: 'any' });
   }
 
   return {
@@ -67,6 +109,7 @@ export function buildOpenApiDocument(version = '0.1.0'): Record<string, unknown>
     tags: [
       { name: 'missions', description: 'Create, list, inspect and re-run missions' },
       { name: 'system', description: 'Health, agent catalog, providers and stats' },
+      { name: 'madre', description: 'MADRE: compile, route, approvals, memory, budget and the live registries. Documents are typed in @acc/madre.' },
     ],
     paths: {
       '/api/health': {
@@ -161,6 +204,113 @@ export function buildOpenApiDocument(version = '0.1.0'): Record<string, unknown>
             '409': errorResponse('A run is already in flight for this mission'),
             '503': errorResponse('The requested provider is declared but not implemented'),
           },
+        },
+      },
+
+      '/api/missions/{id}/trace': {
+        get: {
+          tags: ['madre'],
+          summary: 'The full chain behind a mission: step, agent, model, tools, cost, QA and approvals',
+          description:
+            'Assembled from records that already exist, so it cannot drift from what happened. `trace` is null when the mission has no run yet.',
+          operationId: 'getMissionTrace',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'The trace, or null', ...jsonBody('MadreTrace') }, '404': errorResponse('No such mission') },
+        },
+      },
+      '/api/missions/{id}/madre': {
+        get: {
+          tags: ['madre'],
+          summary: "The MADRE view of a mission: plan, step states, QA rounds, approvals and audit trail",
+          operationId: 'getMissionMadre',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: '`runId` is null when the mission never ran in MADRE mode', ...jsonBody('MadreSnapshot') }, '404': errorResponse('No such mission') },
+        },
+      },
+      '/api/missions/{id}/cancel': {
+        post: {
+          tags: ['madre'],
+          summary: "Cancel the mission's active MADRE run",
+          operationId: 'cancelMission',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: '`cancelled` is false when there was nothing to cancel', ...jsonBody('CancelMissionResponse') }, '404': errorResponse('No such mission') },
+        },
+      },
+      '/api/madre/overview': { get: { tags: ['madre'], summary: 'World model, pending approvals, recent activity and pipeline readiness', operationId: 'madreOverview', responses: { '200': { description: 'Overview', ...jsonBody('MadreOverview') } } } },
+      '/api/madre/agents': { get: { tags: ['madre'], summary: 'The agent registry, including planned agents', operationId: 'madreAgents', responses: { '200': { description: 'Agents', ...jsonBody('MadreAgents') } } } },
+      '/api/madre/providers': { get: { tags: ['madre'], summary: 'Provider profiles with status CONNECTED, NOT_CONNECTED, MOCK, LOCAL or ERROR', operationId: 'madreProviders', responses: { '200': { description: 'Providers', ...jsonBody('MadreProviders') } } } },
+      '/api/madre/providers/health': {
+        post: {
+          tags: ['madre'],
+          summary: 'Probe every provider and record whether it is reachable right now',
+          description:
+            'A real network probe, which is why it is a POST. A provider with nothing configured reports `not_connected` without a request being made; nothing is ever reported healthy because its configuration looks complete.',
+          operationId: 'madreProviderHealth',
+          responses: { '200': { description: 'Profiles with refreshed health', ...jsonBody('MadreProviders') } },
+        },
+      },
+      '/api/madre/tools': { get: { tags: ['madre'], summary: 'The tool registry with honest statuses', operationId: 'madreTools', responses: { '200': { description: 'Tools', ...jsonBody('MadreTools') } } } },
+      '/api/madre/permissions': { get: { tags: ['madre'], summary: 'Permission mode per level', operationId: 'madrePermissions', responses: { '200': { description: 'Modes', ...jsonBody('MadrePermissions') } } } },
+      '/api/madre/activity': {
+        get: {
+          tags: ['madre'], summary: 'Recent audit events', operationId: 'madreActivity',
+          parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 300, default: 60 } }],
+          responses: { '200': { description: 'Events, newest first', ...jsonBody('MadreActivity') } },
+        },
+      },
+      '/api/madre/compile': {
+        post: {
+          tags: ['madre'], summary: 'Compile and route a mission without running it', description: 'No mission, run or memory entry is created.', operationId: 'madreCompile',
+          requestBody: { required: true, ...jsonBody('MadreCompileRequest') },
+          responses: { '200': { description: 'Plan and routing', ...jsonBody('MadreCompileResponse') }, '400': errorResponse('Invalid payload') },
+        },
+      },
+      '/api/madre/memory': {
+        get: {
+          tags: ['madre'], summary: 'List or search memory', operationId: 'madreMemory',
+          parameters: [
+            { name: 'q', in: 'query', schema: { type: 'string' } },
+            { name: 'type', in: 'query', schema: { type: 'string' } },
+            { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 300, default: 100 } },
+          ],
+          responses: { '200': { description: 'Entries and stats', ...jsonBody('MadreMemory') }, '400': errorResponse('Invalid query') },
+        },
+        post: {
+          tags: ['madre'], summary: 'Store something you tell MADRE', description: 'Never stored as verified unless a reference is given.', operationId: 'madreRemember',
+          requestBody: { required: true, ...jsonBody('MadreRememberRequest') },
+          responses: { '201': { description: 'Stored, with any adjustments made', ...jsonBody('MadreRememberResponse') }, '400': errorResponse('Invalid payload') },
+        },
+      },
+      '/api/madre/memory/{id}': {
+        delete: {
+          tags: ['madre'], summary: 'Forget an entry', operationId: 'madreForget',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Deleted', ...jsonBody('MadreForget') }, '404': errorResponse('No such entry') },
+        },
+      },
+      '/api/madre/budget': {
+        get: { tags: ['madre'], summary: 'Budget limits and the cost so far', operationId: 'madreBudget', responses: { '200': { description: 'Budget', ...jsonBody('MadreBudget') } } },
+        patch: {
+          tags: ['madre'], summary: 'Change budget limits (null removes a limit)', operationId: 'madreSetBudget',
+          requestBody: { required: true, ...jsonBody('MadreBudgetRequest') },
+          responses: { '200': { description: 'Updated budget', ...jsonBody('MadreBudget') }, '400': errorResponse('Invalid payload') },
+        },
+      },
+      '/api/madre/approvals': { get: { tags: ['madre'], summary: 'Pending approvals and input requests', operationId: 'madreApprovals', responses: { '200': { description: 'Pending', ...jsonBody('MadreApprovals') } } } },
+      '/api/madre/approvals/{id}/approve': {
+        post: {
+          tags: ['madre'], summary: 'Approve an action, or supply the requested input in `note`', description: 'When the run has no other pending approval it is queued to continue.', operationId: 'madreApprove',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: { required: false, ...jsonBody('MadreDecisionRequest') },
+          responses: { '200': { description: 'Decided', ...jsonBody('MadreDecision') }, '404': errorResponse('No such approval'), '409': errorResponse('Already decided') },
+        },
+      },
+      '/api/madre/approvals/{id}/deny': {
+        post: {
+          tags: ['madre'], summary: 'Deny an action; only the steps that depend on it are blocked', operationId: 'madreDeny',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          requestBody: { required: false, ...jsonBody('MadreDecisionRequest') },
+          responses: { '200': { description: 'Decided', ...jsonBody('MadreDecision') }, '404': errorResponse('No such approval'), '409': errorResponse('Already decided') },
         },
       },
     },

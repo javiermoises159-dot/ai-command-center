@@ -43,8 +43,8 @@ function run(over: Partial<RunDetail> & Pick<RunDetail, 'id' | 'attempt' | 'stat
 function mission(runs: RunDetail[], over: Partial<MissionDetail> = {}): MissionDetail {
   return {
     id: 'm1',
-    prompt: 'Launch a cookie store',
-    title: 'Launch a cookie store',
+    prompt: 'Lanzar una tienda de cookies',
+    title: 'Lanzar una tienda de cookies',
     status: 'failed',
     finalResult: null,
     createdAt: T(0),
@@ -117,7 +117,7 @@ describe('buildActivity', () => {
   it('merges several missions and several runs into one timeline', () => {
     const second = mission(
       [run({ id: 'r9', missionId: 'm2', attempt: 1, status: 'completed', startedAt: T(100), completedAt: T(110), agents: [] })],
-      { id: 'm2', title: 'Second', status: 'completed', createdAt: T(99) },
+      { id: 'm2', title: 'Segunda misión', status: 'completed', createdAt: T(99) },
     );
     const events = buildActivity([failedMission, second]);
     assert.equal(events[0]?.missionId, 'm2');
@@ -158,10 +158,10 @@ describe('deriveCrewState', () => {
           agents: [agent({ id: 'b1', agentId: 'design', orderIndex: 0, status: 'running', startedAt: T(2) })],
         }),
       ],
-      { id: 'm3', title: 'Live one', status: 'running' },
+      { id: 'm3', title: 'Misión en curso', status: 'running' },
     );
     const crew = deriveCrewState([live]);
-    assert.deepEqual(crew.get('design')?.working, { missionId: 'm3', missionTitle: 'Live one' });
+    assert.deepEqual(crew.get('design')?.working, { missionId: 'm3', missionTitle: 'Misión en curso' });
     assert.equal(crew.get('design')?.last?.status, 'running');
   });
 
@@ -210,8 +210,8 @@ describe('deriveCrewState', () => {
 
 describe('excerpt', () => {
   it('skips headings, quotes and short lines and strips markdown', () => {
-    const md = '# Title\n> banner about simulation\n\nshort\n**Positioning:** a `crisp` offer for [Turin](https://x.io) bakers.\nmore';
-    assert.equal(excerpt(md), 'Positioning: a crisp offer for Turin bakers.');
+    const md = '# Título\n> aviso sobre la simulación\n\ncorto\n**Posicionamiento:** una oferta `nítida` para las panaderías de [Turín](https://x.io).\nmás';
+    assert.equal(excerpt(md), 'Posicionamiento: una oferta nítida para las panaderías de Turín.');
   });
 
   it('truncates with an ellipsis and handles null', () => {

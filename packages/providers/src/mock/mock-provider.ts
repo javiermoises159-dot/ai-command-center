@@ -14,6 +14,7 @@ import {
   ProviderFailedError,
   parseMockDirectives,
   type AIProvider,
+  type ProviderHealthReport,
   type ProviderId,
   type ProviderModel,
   type ProviderResult,
@@ -35,13 +36,13 @@ export interface MockProviderOptions {
 }
 
 const MODELS: readonly ProviderModel[] = [
-  { id: 'mock-1', label: 'Mock 1 (deterministic simulation)', contextWindow: 128_000 },
-  { id: 'mock-1-fast', label: 'Mock 1 Fast (no simulated latency)', contextWindow: 128_000 },
+  { id: 'mock-1', label: 'Mock 1 (simulación determinista)', contextWindow: 128_000 },
+  { id: 'mock-1-fast', label: 'Mock 1 Rápido (sin latencia simulada)', contextWindow: 128_000 },
 ];
 
 export class MockProvider implements AIProvider {
   readonly id: ProviderId = 'mock';
-  readonly label = 'Mock (simulated)';
+  readonly label = 'Mock (simulado)';
   readonly availability = 'available' as const;
 
   private readonly minLatencyMs: number;
@@ -58,6 +59,21 @@ export class MockProvider implements AIProvider {
     return MODELS;
   }
 
+  /**
+   * The simulation is always reachable: it is this process, with no network and
+   * no credentials. Reporting `ok` here is honest precisely because nothing is
+   * being claimed about a remote service — and the detail says so, so an `ok`
+   * mock is never mistaken for a connected model.
+   */
+  health(): Promise<ProviderHealthReport> {
+    return Promise.resolve({
+      status: 'ok',
+      detail:
+        'Simulación local: responde siempre porque se ejecuta en este mismo proceso, sin red ni credenciales. No es un modelo real y sus resultados son simulados.',
+      latencyMs: 0,
+    });
+  }
+
   async execute(task: ProviderTask, signal?: AbortSignal): Promise<ProviderResult> {
     const startedAt = Date.now();
     const missionPrompt = task.context?.missionPrompt ?? task.prompt;
@@ -72,7 +88,7 @@ export class MockProvider implements AIProvider {
     if (latency > 0) await this.sleep(latency, signal);
 
     if (signal?.aborted) {
-      throw new ProviderFailedError('mock', 'The agent run was cancelled.');
+      throw new ProviderFailedError('mock', 'La ejecución del agente fue cancelada.');
     }
 
     // Injected failure: `[fail:<agentId>]` anywhere in the mission statement.
@@ -80,7 +96,7 @@ export class MockProvider implements AIProvider {
     if (directives.failingAgents.has(task.agentId)) {
       throw new ProviderFailedError(
         'mock',
-        `Simulated failure injected via [fail:${task.agentId}] in the mission statement.`,
+        `Fallo simulado inyectado mediante [fail:${task.agentId}] en el enunciado de la misión.`,
       );
     }
 
@@ -109,6 +125,8 @@ export class MockProvider implements AIProvider {
       requestId: `mock_${hashString(`${task.agentId}:${missionPrompt}`).toString(16)}`,
       finishReason: 'stop',
       latencyMs: Date.now() - startedAt,
+      source: 'mock',
+      simulated: true,
     };
   }
 }
@@ -116,7 +134,7 @@ export class MockProvider implements AIProvider {
 function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new ProviderFailedError('mock', 'The agent run was cancelled.'));
+      reject(new ProviderFailedError('mock', 'La ejecución del agente fue cancelada.'));
       return;
     }
     const timer = setTimeout(() => {
@@ -125,7 +143,7 @@ function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
     }, ms);
     const onAbort = () => {
       clearTimeout(timer);
-      reject(new ProviderFailedError('mock', 'The agent run was cancelled.'));
+      reject(new ProviderFailedError('mock', 'La ejecución del agente fue cancelada.'));
     };
     signal?.addEventListener('abort', onAbort, { once: true });
   });

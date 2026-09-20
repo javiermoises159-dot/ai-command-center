@@ -24,6 +24,8 @@ import {
   type CreateAgentExecutionData,
   type CreateMissionData,
   type CreateRunData,
+  type DocumentQuery,
+  type DocumentStore,
   type ListMissionsOptions,
   type Mission,
   type MissionDetail,
@@ -36,17 +38,20 @@ import {
   type RunDetail,
   type RunId,
   type RunRepository,
+  type PutDocumentData,
   type RunStatus,
+  type StoredDocument,
 } from '@acc/domain';
 
 interface Store {
   missions: Map<MissionId, Mission>;
   runs: Map<RunId, MissionRun>;
   agents: Map<AgentExecutionId, AgentExecution>;
+  documents: Map<string, StoredDocument>;
 }
 
 function createStore(): Store {
-  return { missions: new Map(), runs: new Map(), agents: new Map() };
+  return { missions: new Map(), runs: new Map(), agents: new Map(), documents: new Map() };
 }
 
 /** Defensive copy so callers cannot mutate stored state by reference. */
@@ -97,7 +102,10 @@ class MemoryMissionRepository implements MissionRepository {
   list(options: ListMissionsOptions = {}): Promise<MissionSummary[]> {
     const { limit = 20, offset = 0, status } = options;
 
+    // Newest first. Map iteration is insertion order, so on a same-millisecond
+    // tie the later insertion wins (reverse first, then a stable sort).
     const missions = [...this.store.missions.values()]
+      .reverse()
       .filter((m) => (status === undefined ? true : m.status === status))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(offset, offset + limit);
@@ -329,6 +337,66 @@ class MemoryAgentExecutionRepository implements AgentExecutionRepository {
   }
 }
 
+/** In-memory twin of the Postgres `madre_documents` table. */
+class MemoryDocumentStore implements DocumentStore {
+  private sequence = 0;
+  /** Insertion order breaks ties between documents created in the same instant. */
+  private readonly order = new Map<string, number>();
+
+  constructor(private readonly store: Store) {}
+
+  private key(kind: string, id: string): string {
+    return `${kind}\u0000${id}`;
+  }
+
+  put(data: PutDocumentData): Promise<void> {
+    const key = this.key(data.kind, data.id);
+    const existing = this.store.documents.get(key);
+    if (existing === undefined) this.order.set(key, this.sequence++);
+    this.store.documents.set(key, {
+      kind: data.kind,
+      id: data.id,
+      missionId: data.missionId ?? null,
+      runId: data.runId ?? null,
+      scope: data.scope ?? null,
+      createdAt: existing?.createdAt ?? data.at,
+      updatedAt: data.at,
+      payload: clone(data.payload),
+    });
+    return Promise.resolve();
+  }
+
+  get(kind: string, id: string): Promise<StoredDocument | null> {
+    const found = this.store.documents.get(this.key(kind, id));
+    return Promise.resolve(found === undefined ? null : clone(found));
+  }
+
+  list(query: DocumentQuery = {}): Promise<StoredDocument[]> {
+    const kinds = query.kind === undefined ? null : Array.isArray(query.kind) ? query.kind : [query.kind];
+    let rows = [...this.store.documents.entries()].filter(([, doc]) => {
+      if (kinds !== null && !kinds.includes(doc.kind)) return false;
+      if (query.missionId !== undefined && doc.missionId !== query.missionId) return false;
+      if (query.runId !== undefined && doc.runId !== query.runId) return false;
+      if (query.scope !== undefined && doc.scope !== query.scope) return false;
+      return true;
+    });
+    const direction = query.order === 'desc' ? -1 : 1;
+    rows = rows.sort(([ka, a], [kb, b]) => {
+      const byTime = a.createdAt.getTime() - b.createdAt.getTime();
+      return direction * (byTime !== 0 ? byTime : (this.order.get(ka) ?? 0) - (this.order.get(kb) ?? 0));
+    });
+    const limited = query.limit === undefined ? rows : rows.slice(0, query.limit);
+    return Promise.resolve(limited.map(([, doc]) => clone(doc)));
+  }
+
+  remove(kind: string, id: string): Promise<boolean> {
+    const key = this.key(kind, id);
+    this.order.delete(key);
+    return Promise.resolve(this.store.documents.delete(key));
+  }
+
+}
+
 export function createMemoryRepositories(): Repositories {
   const store = createStore();
   const set = {
@@ -339,6 +407,7 @@ export function createMemoryRepositories(): Repositories {
 
   return {
     ...set,
+    documents: new MemoryDocumentStore(store),
     /**
      * NOT atomic, and deliberately not faked to look atomic: implementing
      * rollback would mean snapshotting three Maps on every call to buy
@@ -352,6 +421,7 @@ export function createMemoryRepositories(): Repositories {
       store.missions.clear();
       store.runs.clear();
       store.agents.clear();
+      store.documents.clear();
       return Promise.resolve();
     },
   };
