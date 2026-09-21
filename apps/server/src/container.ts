@@ -94,6 +94,7 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     ollamaBaseUrl: config.ollamaBaseUrl,
     webSearchApiKey: config.webSearchApiKey,
     enableWikipedia: config.enableWikipedia,
+    enableWebFetch: config.enableWebFetch,
     disabledProviders: config.disabledProviders,
     engine: {
       parallelism: config.madre.parallelism,

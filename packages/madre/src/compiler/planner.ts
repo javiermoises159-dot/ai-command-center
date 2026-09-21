@@ -235,7 +235,7 @@ export class RulesPlanner implements Planner {
       capability: task.capability,
       dependsOn: [],
       task: agentTask,
-      toolRequests: this.toolRequestsFor(id, agent, task.capability, fresh, searchQuery(compiled, task), warnings),
+      toolRequests: this.toolRequestsFor(id, agent, task.capability, fresh, searchQuery(compiled, task), warnings, urlsIn(compiled)),
       verification: compiled.verificationCriteria.filter((c) => c.appliesTo.includes('*')).map((c) => c.id),
       maxAttempts,
     };
@@ -320,6 +320,7 @@ export class RulesPlanner implements Planner {
     fresh: boolean,
     query: string,
     warnings: Set<string>,
+    urls: readonly string[] = [],
   ): ToolRequest[] {
     const requests: ToolRequest[] = [];
     const add = (toolId: string, purpose: string, required: boolean, input: Record<string, unknown> | null, suffix = ''): void => {
@@ -352,8 +353,15 @@ export class RulesPlanner implements Planner {
       // Several narrow searches find more than one long one: the topic on its
       // own, then the angles this kind of step needs (competitors, prices, rules).
       const topic = keywords(query, 8) || query.slice(0, 120);
-      const queries = [...new Set([topic, ...(SEARCH_ANGLES[capability] ?? []).map((angle) => `${angle} ${topic}`)])].slice(0, MAX_SEARCHES_PER_STEP);
+      const angles = (SEARCH_ANGLES[capability] ?? []).map((angle) => `${angle} ${topic}`);
+      // A mission about Italy is also searched in Italian: local businesses and
+      // rules are mostly documented there, and Spanish keywords miss them.
+      if (angles.length > 0 && ITALY.test(query)) angles.splice(1, 1, `prezzi costi servizi ${topic}`);
+      const queries = [...new Set([topic, ...angles])].slice(0, MAX_SEARCHES_PER_STEP);
       queries.forEach((q, i) => add('web.search', i === 0 ? 'Consultar fuentes actuales.' : `Buscar fuentes: ${q.slice(0, 60)}`, false, { query: q.slice(0, 300), limit: 5 }, i === 0 ? '' : `#${i + 1}`));
+    }
+    if (capability.startsWith('research.') && agent.optionalTools.includes('web.fetch')) {
+      urls.slice(0, 2).forEach((url, i) => add('web.fetch', 'Leer la página que el usuario indicó.', false, { url }, `#${i + 1}`));
     }
     if (capability.startsWith('research.') && agent.optionalTools.includes('research.wikipedia')) {
       add('research.wikipedia', 'Contexto enciclopédico con fuente citable.', false, { title: query.slice(0, 150) });
@@ -397,6 +405,13 @@ export class RulesPlanner implements Planner {
 
 /** What a retrieval tool should look for on behalf of one task: the mission's subject plus the task's own title. */
 const MAX_SEARCHES_PER_STEP = 3;
+const ITALY = /\b(italia|italy|italiano|italiana|tur[ií]n|torino|mil[aá]n|milano|roma|n[aá]poles|napoli|bolo[nñ]ia|bologna|florencia|firenze|venecia|venezia|g[eé]nova|genova)\b/i;
+
+/** Addresses the user wrote in the mission, which they clearly want read. */
+function urlsIn(compiled: CompiledMission): string[] {
+  const text = [compiled.objective.text, ...compiled.context.map((s) => s.text)].join(' ');
+  return [...new Set(text.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [])].map((u) => u.replace(/[.,;:!?]+$/, ''));
+}
 
 /** Extra angles to search for, by the kind of research the step does. */
 const SEARCH_ANGLES: Partial<Record<string, string[]>> = {

@@ -29,6 +29,7 @@ import { createToolRegistry, type ToolRegistry } from './registry/tools.ts';
 import { SmartRouter } from './router/router.ts';
 import { KINDS, MadreStore } from './store.ts';
 import { LocalToolExecutor } from './tools/executor.ts';
+import type { PageFetcher } from './tools/safe-fetch.ts';
 import type { WebFetch } from './tools/web.ts';
 import { ToolPipeline } from './tools/pipeline.ts';
 import type {
@@ -84,8 +85,11 @@ export interface MadreConfig {
   webSearchApiKey?: string | undefined;
   /** Turns on `research.wikipedia` (public API, no key). Off by default so nothing reaches the network unasked. */
   enableWikipedia?: boolean | undefined;
+  /** Turns on `web.fetch` and lets `web.search` read its top pages. Off by default. */
+  enableWebFetch?: boolean | undefined;
   /** Injected in tests so tools never touch the network. */
   toolFetch?: WebFetch | undefined;
+  pageFetcher?: PageFetcher | undefined;
   /** Injected in tests so a health probe never touches the network. */
   healthFetch?: HealthFetch;
 }
@@ -367,12 +371,15 @@ export function createMadre(config: MadreConfig): Madre {
   if (config.enableWikipedia === true) {
     tools.setStatus('research.wikipedia', 'AVAILABLE', 'API pública de Wikipedia, sin clave. Devuelve la introducción del artículo que mejor coincide, con su URL.');
   }
+  if (config.enableWebFetch === true) {
+    tools.setStatus('web.fetch', 'AVAILABLE', 'Lee páginas web públicas (http/https). Bloquea localhost y redes privadas; el texto se trata como dato, nunca como instrucciones.');
+  }
   if (config.webSearchApiKey !== undefined && config.webSearchApiKey.trim() !== '') {
     tools.setStatus('web.search', 'AVAILABLE', 'Conectada a Tavily (plan gratuito). Las consultas salen del servidor; la clave nunca llega al navegador.');
   }
   const toolPipeline = new ToolPipeline({
     tools, policy, cost, audit,
-    executor: new LocalToolExecutor(tools, memory, { fetch: config.toolFetch, searchApiKey: config.webSearchApiKey?.trim() || undefined }),
+    executor: new LocalToolExecutor(tools, memory, { fetch: config.toolFetch, searchApiKey: config.webSearchApiKey?.trim() || undefined, pageFetcher: config.pageFetcher, enrichSearch: config.enableWebFetch === true }),
   });
 
   const engine = new MadreEngine({
