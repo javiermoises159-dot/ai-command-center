@@ -71,6 +71,7 @@ import { AUDITED_EXCLUSIONS, PROVIDER_EVENTS, blockedErrorInfo, explanationData,
 import type { FailedUpstream, StepRunInput, StepRunner, UpstreamText } from './runner.ts';
 import { deriveBlockers, deriveConfidence, deriveNextAction, latestVerdict } from './summary.ts';
 import { emptyCostSummary } from '../cost/controller.ts';
+import { withSources } from './sources.ts';
 
 export interface EngineOptions {
   /** Steps that may run at once. 1 = strictly sequential. */
@@ -1189,7 +1190,7 @@ export class MadreEngine {
 
     const integrate = ctx.plan.steps.find((s) => s.kind === 'integrate');
     const integrateState = integrate !== undefined ? this.stateOf(ctx, integrate.id) : null;
-    const finalResult = integrateState?.status === 'DONE' ? (integrateState.result?.text ?? null) : null;
+    const finalResult = withSources(integrateState?.status === 'DONE' ? (integrateState.result?.text ?? null) : null, ctx.state.steps);
     const failedSteps = ctx.state.steps.filter((s) => s.status === 'FAILED');
     const verdict = latestVerdict(ctx.state.qaRounds);
     const success = finalResult !== null && failedSteps.length === 0 && verdict !== 'BLOCKED';
@@ -1305,7 +1306,7 @@ function terminalOutcome(ctx: RunContext): EngineOutcome | null {
     runId: ctx.runId,
     status: phase,
     phase,
-    finalResult: st?.status === 'DONE' ? (st.result?.text ?? null) : null,
+    finalResult: withSources(st?.status === 'DONE' ? (st.result?.text ?? null) : null, ctx.state.steps),
     verdict: latestVerdict(ctx.state.qaRounds),
   };
 }
