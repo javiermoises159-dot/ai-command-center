@@ -86,3 +86,23 @@ describe('faceless factory', () => {
     assert.equal(/\d+\s?(USD|EUR|\$|€)/.test(JSON.stringify(plan)), false);
   });
 });
+
+describe('creative studio capabilities', () => {
+  const status = (r: ReturnType<typeof planContentPipeline>, id: string) => r.stages.find((s) => s.id === id)?.status;
+
+  it('marks the stages the studio can really do as ready, and leaves the rest as they were', () => {
+    const before = planContentPipeline(deps());
+    assert.equal(status(before, 'voice'), 'blocked');
+    const after = planContentPipeline({ ...deps(), studio: new Set(['script', 'image', 'voice', 'edit']) });
+    for (const id of ['script', 'visuals', 'voice', 'editing']) assert.equal(status(after, id), 'ready', id);
+    assert.match(after.stages.find((s) => s.id === 'editing')?.note ?? '', /Estudio/);
+    assert.equal(status(after, 'publish'), 'blocked'); // nothing publishes on its own
+  });
+
+  it('needs every capability a stage asks for', () => {
+    const media = planMediaPipeline({ ...deps(), studio: new Set(['edit']) });
+    assert.equal(media.stages.find((s) => s.id === 'clip')?.status, 'ready');
+    assert.notEqual(media.stages.find((s) => s.id === 'captions')?.status, 'ready'); // captions also need transcription
+    assert.equal(planMediaPipeline({ ...deps(), studio: new Set(['edit', 'transcribe']) }).stages.find((s) => s.id === 'captions')?.status, 'ready');
+  });
+});

@@ -27,6 +27,12 @@ export interface StageSpec {
   assist?: string[];
   /** What the stand-in produces, shown to the user. */
   assistNote?: string;
+  /**
+   * Studio capabilities (all needed) that do this stage when the PERSON asks for it in
+   * the app's creative studio. They are real, but not called by agents on their own, so
+   * they make the stage ready without lifting any agent permission.
+   */
+  studio?: string[];
   permission: PermissionLevel;
 }
 
@@ -59,8 +65,21 @@ export interface PipelineReport {
   summary: string;
 }
 
-export function assess(specs: readonly StageSpec[], agents: AgentRegistry, tools: ToolRegistry, policy: PermissionPolicy): PipelineReport {
+export function assess(specs: readonly StageSpec[], agents: AgentRegistry, tools: ToolRegistry, policy: PermissionPolicy, studio: ReadonlySet<string> = new Set()): PipelineReport {
   const stages: StageReadiness[] = specs.map((spec) => {
+    if (spec.studio !== undefined && spec.studio.every((c) => studio.has(c))) {
+      return {
+        id: spec.id,
+        title: spec.title,
+        group: spec.group,
+        status: 'ready' as const,
+        missing: [],
+        note: `${spec.description} Lo hace el Estudio de Creatividad cuando tú se lo pides; los agentes no lo lanzan por su cuenta.`,
+        needsApproval: false,
+        blockedByPolicy: false,
+      };
+    }
+
     const missing: string[] = [];
     const agentOk = spec.agents === undefined || spec.agents.length === 0 || spec.agents.some((id) => agents.get(id)?.status === 'active');
     if (!agentOk) missing.push(...(spec.agents ?? []).map((id) => `agent:${id}`));

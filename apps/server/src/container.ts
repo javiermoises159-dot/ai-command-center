@@ -99,7 +99,21 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
 
   const queue = new InProcessJobQueue({ concurrency: config.queueConcurrency, logger });
 
+  // What the creative studio can really do with this server's keys and tools.
+  const hasRealAi = providers.availableIds().some((id) => id !== 'mock');
+  const hasCloudflare = config.cloudflareAccountId !== undefined && config.cloudflareApiToken !== undefined;
+  const hasVoice = config.geminiApiKey !== undefined || hasCloudflare;
+  const hasFfmpeg = ffmpegAvailable();
+  const studio = [
+    ...(hasRealAi ? ['script'] : []),
+    ...(hasCloudflare ? ['image', 'transcribe'] : []),
+    ...(hasVoice ? ['voice'] : []),
+    ...(hasFfmpeg ? ['edit'] : []),
+    ...(hasFfmpeg && hasCloudflare && hasVoice ? ['reel'] : []),
+  ];
+
   const madre = createMadre({
+    studio,
     repositories,
     providers,
     enqueue: (job) => queue.enqueue(job),

@@ -83,6 +83,8 @@ export interface MadreConfig {
   ollamaBaseUrl?: string | undefined;
   /** Tavily key for `web.search`. Absent leaves the tool NOT_CONNECTED. Never sent to the browser. */
   webSearchApiKey?: string | undefined;
+  /** What the creative studio can really do today (script, image, voice, edit, transcribe, reel). Shown in the pipelines report. */
+  studio?: readonly string[] | undefined;
   /** Alternate between equally good providers, step by step. Off by default. */
   balanceProviders?: boolean | undefined;
   /** Turns on `news.gdelt` (public news API, no key). Off by default. */
@@ -134,6 +136,7 @@ export class MadreService {
       planner: Planner;
       engine: MadreEngine;
       enqueue: (job: Job) => Promise<unknown>;
+      studio?: ReadonlySet<string> | undefined;
       clock: Clock;
       /** Only used to probe the local model server. Never leaves the server. */
       ollamaBaseUrl?: string | undefined;
@@ -322,7 +325,7 @@ export class MadreService {
 
   async overview(): Promise<Overview> {
     const [world, pending, recent] = await Promise.all([this.world(), this.d.approvals.pending(), this.d.audit.recent(20)]);
-    const deps = { agents: this.d.agents, tools: this.d.tools, policy: this.d.policy };
+    const deps = { agents: this.d.agents, tools: this.d.tools, policy: this.d.policy, ...(this.d.studio !== undefined ? { studio: this.d.studio } : {}) };
     return { world, pendingApprovals: pending.length, recent, pipelines: { content: planContentPipeline(deps), media: planMediaPipeline(deps) } };
   }
 }
@@ -406,7 +409,7 @@ export function createMadre(config: MadreConfig): Madre {
 
   const service = new MadreService({
     repositories: config.repositories, store, audit, agents, tools, catalog, policy, cost, memory, approvals, router, planner, engine,
-    enqueue: config.enqueue, clock, ollamaBaseUrl: config.ollamaBaseUrl, healthFetch: config.healthFetch,
+    enqueue: config.enqueue, studio: new Set(config.studio ?? []), clock, ollamaBaseUrl: config.ollamaBaseUrl, healthFetch: config.healthFetch,
     probe: config.providers.probe === undefined ? undefined : (id) => config.providers.probe!(id),
   });
 

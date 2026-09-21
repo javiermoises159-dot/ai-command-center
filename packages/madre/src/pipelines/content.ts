@@ -42,6 +42,7 @@ export const CONTENT_STAGES: readonly StageSpec[] = [
     agents: ['content'],
     assist: ['marketing'],
     assistNote: 'El agente de Marketing puede redactar el mensaje y el esquema; no hay un agente de contenido específico activo.',
+    studio: ['script'],
     permission: 'READ',
   },
   {
@@ -53,6 +54,7 @@ export const CONTENT_STAGES: readonly StageSpec[] = [
     tools: [['media.image_generation', 'media.video_generation']],
     assist: ['design'],
     assistNote: 'El agente de Diseño puede escribir el briefing visual; no hay ningún generador de imagen o vídeo conectado para crear los materiales.',
+    studio: ['image'],
     permission: 'READ',
   },
   {
@@ -62,6 +64,7 @@ export const CONTENT_STAGES: readonly StageSpec[] = [
     description: 'Grabar o sintetizar la locución.',
     agents: ['video'],
     tools: [['media.voice_generation']],
+    studio: ['voice'],
     permission: 'READ',
   },
   {
@@ -71,6 +74,7 @@ export const CONTENT_STAGES: readonly StageSpec[] = [
     description: 'Cortar, subtitular y montar la pieza.',
     agents: ['video'],
     tools: [['media.ffmpeg', 'media.autoclip', 'media.moneyprinter']],
+    studio: ['edit'],
     permission: 'EXECUTE',
   },
   {
@@ -109,8 +113,8 @@ export const CONTENT_STAGES: readonly StageSpec[] = [
   },
 ];
 
-export function planContentPipeline(deps: { agents: AgentRegistry; tools: ToolRegistry; policy: PermissionPolicy }): PipelineReport {
-  return assess(CONTENT_STAGES, deps.agents, deps.tools, deps.policy);
+export function planContentPipeline(deps: { agents: AgentRegistry; tools: ToolRegistry; policy: PermissionPolicy; studio?: ReadonlySet<string> }): PipelineReport {
+  return assess(CONTENT_STAGES, deps.agents, deps.tools, deps.policy, deps.studio);
 }
 
 // ---------------------------------------------------------------------------
