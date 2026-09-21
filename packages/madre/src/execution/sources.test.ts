@@ -25,3 +25,23 @@ describe('sources section', () => {
     assert.equal(withSources(null, steps as never), null);
   });
 });
+
+import { svgBlocks, withLogos } from './sources.ts';
+
+describe('logos section', () => {
+  const good = '<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><circle cx="256" cy="256" r="200" fill="#3e2723"/></svg>';
+  const text = `Opción A\n\`\`\`svg\n${good}\n\`\`\`\nOpción B\n\`\`\`svg\n<svg><script>alert(1)</script></svg>\n\`\`\`\nOpción C\n\`\`\`svg\n<svg><image href="https://evil.example/x.png"/></svg>\n\`\`\``;
+
+  it('keeps only complete, self-contained drawings', () => {
+    assert.deepEqual(svgBlocks(text), [good]);
+  });
+
+  it('appends them to the report, or leaves it alone', () => {
+    const out = withLogos('# Informe', [text])!;
+    assert.match(out, /## Logotipos/);
+    assert.ok(out.includes(good));
+    assert.doesNotMatch(out, /script|evil\.example/);
+    assert.equal(withLogos('# Informe', ['sin dibujos']), '# Informe');
+    assert.equal(withLogos(null, [text]), null);
+  });
+});

@@ -389,3 +389,23 @@ export const RESEARCH_QUESTIONS: Partial<Record<MissionKind, string[]>> = {
 };
 
 export { ONLINE };
+
+/** A mission that asks for a logo or a visual identity. */
+export const LOGO_REQUEST = /\b(?:logo(?:tipo)?s?|isotipo|imagotipo|identidad visual|brand identity|logotype|marchio)\b/iu;
+
+export const BRAND_TASK: TaskTemplate = {
+  capability: 'design.brand',
+  title: 'Definir la marca',
+  description: 'Define la dirección del nombre, el tono y la identidad visual que encajan con lo que pide el usuario.',
+};
+
+export const LOGO_TASK: TaskTemplate = {
+  capability: 'design.logo',
+  title: 'Diseñar el logotipo',
+  description:
+    'Propón 3 opciones de logotipo distintas. Cada una lleva un nombre, una línea que explique la idea y el dibujo COMPLETO como un único bloque de código ```svg. ' +
+    'Reglas del SVG: viewBox="0 0 512 512"; solo formas básicas, trazados (path), degradados y texto con fuentes genéricas (sans-serif o serif); ' +
+    'colores en hexadecimal, máximo 4; sin scripts, sin imágenes ni fuentes externas y sin foreignObject; que se entienda también a 32 píxeles. ' +
+    'Después de las tres opciones, di cuál recomiendas y por qué. Si el usuario no dio el nombre de la marca, propón uno y márcalo como propuesta.',
+  after: ['design.brand'],
+};

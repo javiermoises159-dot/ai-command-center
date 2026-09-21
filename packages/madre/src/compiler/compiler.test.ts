@@ -275,3 +275,21 @@ describe('planner', () => {
     assert.ok(validatePlan(plan).some((p) => /unknown step/.test(p)));
   });
 });
+
+describe('logo requests', () => {
+  it('a plain logo request gets the brand direction and the logo, nothing else', () => {
+    const plan = planner().plan('Hazme un logo para mi marca de cookies');
+    const capabilities = plan.steps.filter((s) => s.kind === 'agent').map((s) => s.capability);
+    assert.ok(capabilities.includes('design.logo'));
+    assert.ok(capabilities.length <= 6);
+  });
+  it('a bigger mission that mentions a logo adds the logo step after the brand', () => {
+    const plan = planner().plan('Quiero abrir una tienda online de cookies en Italia. Necesito también un logotipo.');
+    const capabilities = plan.steps.filter((s) => s.kind === 'agent').map((s) => s.capability);
+    assert.ok(capabilities.includes('design.brand') && capabilities.includes('design.logo'));
+  });
+  it('a mission that does not ask for one gets none', () => {
+    const plan = planner().plan('Quiero abrir una tienda online de cookies en Italia.');
+    assert.ok(!plan.steps.some((s) => s.capability === 'design.logo'));
+  });
+});

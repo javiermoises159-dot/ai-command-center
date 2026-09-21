@@ -71,7 +71,7 @@ import { AUDITED_EXCLUSIONS, PROVIDER_EVENTS, blockedErrorInfo, explanationData,
 import type { FailedUpstream, StepRunInput, StepRunner, UpstreamText } from './runner.ts';
 import { deriveBlockers, deriveConfidence, deriveNextAction, latestVerdict } from './summary.ts';
 import { emptyCostSummary } from '../cost/controller.ts';
-import { withSources } from './sources.ts';
+import { withLogos, withSources } from './sources.ts';
 
 export interface EngineOptions {
   /** Steps that may run at once. 1 = strictly sequential. */
@@ -1193,7 +1193,7 @@ export class MadreEngine {
 
     const integrate = ctx.plan.steps.find((s) => s.kind === 'integrate');
     const integrateState = integrate !== undefined ? this.stateOf(ctx, integrate.id) : null;
-    const finalResult = withSources(integrateState?.status === 'DONE' ? (integrateState.result?.text ?? null) : null, ctx.state.steps);
+    const finalResult = withSources(withLogos(integrateState?.status === 'DONE' ? (integrateState.result?.text ?? null) : null, logoTexts(ctx)), ctx.state.steps);
     const failedSteps = ctx.state.steps.filter((s) => s.status === 'FAILED');
     const verdict = latestVerdict(ctx.state.qaRounds);
     const success = finalResult !== null && failedSteps.length === 0 && verdict !== 'BLOCKED';
@@ -1309,7 +1309,13 @@ function terminalOutcome(ctx: RunContext): EngineOutcome | null {
     runId: ctx.runId,
     status: phase,
     phase,
-    finalResult: withSources(st?.status === 'DONE' ? (st.result?.text ?? null) : null, ctx.state.steps),
+    finalResult: withSources(withLogos(st?.status === 'DONE' ? (st.result?.text ?? null) : null, logoTexts(ctx)), ctx.state.steps),
     verdict: latestVerdict(ctx.state.qaRounds),
   };
+}
+
+/** The text of every finished logo-design step: where the drawings come from. */
+function logoTexts(ctx: RunContext): string[] {
+  const logoSteps = new Set(ctx.plan.steps.filter((s) => s.capability === 'design.logo').map((s) => s.id));
+  return ctx.state.steps.filter((s) => logoSteps.has(s.stepId) && s.status === 'DONE' && s.result?.text != null).map((s) => s.result!.text);
 }

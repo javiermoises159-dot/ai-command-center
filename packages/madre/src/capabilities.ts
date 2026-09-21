@@ -35,6 +35,7 @@ export const CAPABILITIES = {
   // Design
   'design.ux': 'Definir el recorrido del usuario y los principios de interfaz.',
   'design.brand': 'Fijar la identidad visual y el tono.',
+  'design.logo': 'Dibujar opciones de logotipo como imágenes SVG.',
   'design.visual_brief': 'Preparar el briefing de las piezas visuales que necesita una campaña o un producto.',
   // Quality and integration
   'qa.review': 'Auditar los resultados en busca de huecos, contradicciones y afirmaciones sin verificar.',

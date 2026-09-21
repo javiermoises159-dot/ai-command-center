@@ -10,6 +10,8 @@
 
 import type { ReactNode } from 'react';
 
+import { isSafeSvg, svgDataUrl } from './svg.ts';
+
 type Block =
   | { kind: 'heading'; level: number; text: string }
   | { kind: 'paragraph'; text: string }
@@ -254,15 +256,33 @@ export function Markdown({ source, className }: { source: string; className?: st
               </blockquote>
             );
 
-          case 'code':
+          case 'code': {
+            const source = block.lines.join('\n');
+            if (block.language.toLowerCase() === 'svg' && isSafeSvg(source)) {
+              const url = svgDataUrl(source);
+              return (
+                <figure key={key} className="overflow-hidden rounded-lg border border-[var(--color-edge)]">
+                  <div className="flex justify-center bg-white p-4">
+                    <img src={url} alt="Logotipo propuesto" className="h-40 w-40 object-contain" />
+                  </div>
+                  <figcaption className="flex items-center justify-between gap-3 bg-[var(--color-tint)] px-3 py-2 text-[0.75rem]">
+                    <span>Imagen SVG</span>
+                    <a href={url} download="logotipo.svg" className="font-semibold text-[var(--color-signal)] underline">
+                      Descargar
+                    </a>
+                  </figcaption>
+                </figure>
+              );
+            }
             return (
               <pre
                 key={key}
                 className="overflow-x-auto rounded-lg border border-[var(--color-edge)] bg-[var(--color-tint)] p-3 font-mono text-[0.78rem] leading-relaxed text-[var(--color-ink)]"
               >
-                <code>{block.lines.join('\n')}</code>
+                <code>{source}</code>
               </pre>
             );
+          }
 
           case 'table':
             return (

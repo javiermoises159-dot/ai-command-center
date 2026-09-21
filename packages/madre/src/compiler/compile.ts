@@ -29,6 +29,9 @@ import {
   DESIRED_OUTCOMES,
   HYPOTHESES,
   IDEAL_EXTRAS,
+  BRAND_TASK,
+  LOGO_REQUEST,
+  LOGO_TASK,
   RESEARCH_QUESTIONS,
   TEMPLATES,
   type TaskTemplate,
@@ -49,6 +52,20 @@ export function taskIdFor(capability: Capability): string {
 }
 
 function pickTemplates(intent: MissionIntent, maxTasks: number): TaskTemplate[] {
+  const wantsLogo = LOGO_REQUEST.test(intent.rawText);
+  // A mission that is just "make me a logo" gets the brand direction and the logo,
+  // not the generic questions of a general mission.
+  if (wantsLogo && intent.kind === 'general') return [BRAND_TASK, LOGO_TASK];
+  const chosen = pickBase(intent, maxTasks);
+  // Asked for a logo inside a bigger mission: add it after the brand step.
+  if (wantsLogo && !chosen.some((t) => t.capability === 'design.logo')) {
+    if (!chosen.some((t) => t.capability === 'design.brand')) chosen.push(BRAND_TASK);
+    chosen.push(LOGO_TASK);
+  }
+  return chosen;
+}
+
+function pickBase(intent: MissionIntent, maxTasks: number): TaskTemplate[] {
   const kinds: MissionKind[] = [intent.kind, ...intent.secondaryKinds];
   const chosen: TaskTemplate[] = [];
   const seen = new Set<Capability>();
