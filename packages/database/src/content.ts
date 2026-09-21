@@ -9,7 +9,7 @@ import type pg from 'pg';
 
 export type Platform = 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'telegram' | 'other';
 export type ContentStatus = 'draft' | 'scheduled' | 'published';
-export type MediaKind = 'image' | 'audio';
+export type MediaKind = 'image' | 'audio' | 'video';
 
 export interface ContentItem {
   id: string;
@@ -23,6 +23,7 @@ export interface ContentItem {
   voiceText: string;
   hasImage: boolean;
   hasAudio: boolean;
+  hasVideo: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,7 +75,7 @@ function definedOnly<T extends object>(value: T): Partial<T> {
 }
 
 const COLUMNS = `id, title, caption, platform, status, scheduled_at, published_at, image_prompt, voice_text,
-  (image_b64 IS NOT NULL) AS has_image, (audio_b64 IS NOT NULL) AS has_audio, created_at, updated_at`;
+  (image_b64 IS NOT NULL) AS has_image, (audio_b64 IS NOT NULL) AS has_audio, (video_b64 IS NOT NULL) AS has_video, created_at, updated_at`;
 
 interface Row {
   id: string;
@@ -88,6 +89,7 @@ interface Row {
   voice_text: string;
   has_image: boolean;
   has_audio: boolean;
+  has_video: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -105,6 +107,7 @@ function fromRow(row: Row): ContentItem {
     voiceText: row.voice_text,
     hasImage: row.has_image,
     hasAudio: row.has_audio,
+    hasVideo: row.has_video,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   };
@@ -150,7 +153,7 @@ export class PgContentStore implements ContentStore {
     return (result.rowCount ?? 0) > 0;
   }
   async setMedia(id: string, kind: MediaKind, media: Media): Promise<ContentItem | null> {
-    const column = kind === 'image' ? 'image' : 'audio';
+    const column = kind;
     const { rows } = await this.pool.query<Row>(
       `UPDATE content_items SET ${column}_mime = $2, ${column}_b64 = $3, updated_at = now() WHERE id = $1 RETURNING ${COLUMNS}`,
       [id, media.mime, media.base64],
@@ -158,7 +161,7 @@ export class PgContentStore implements ContentStore {
     return rows[0] === undefined ? null : fromRow(rows[0]);
   }
   async getMedia(id: string, kind: MediaKind): Promise<Media | null> {
-    const column = kind === 'image' ? 'image' : 'audio';
+    const column = kind;
     const { rows } = await this.pool.query<{ mime: string | null; b64: string | null }>(`SELECT ${column}_mime AS mime, ${column}_b64 AS b64 FROM content_items WHERE id = $1`, [id]);
     const row = rows[0];
     return row?.mime && row.b64 ? { mime: row.mime, base64: row.b64 } : null;

@@ -19,6 +19,7 @@ import { createRepositories } from '@acc/repositories';
 import type { ServerConfig } from './config.ts';
 import { GitHubPagesPublisher, parseRepo, type SitePublisher } from './publish/github-pages.ts';
 import { buildMedia, CloudflareMedia, GeminiVoice, type MediaGenerator } from './content/media.ts';
+import { createReelMaker, ffmpegAvailable, type ReelMaker } from './content/video.ts';
 import { MemoryContentStore, type ContentStore } from './content/store.ts';
 import { createLogger } from './logger.ts';
 
@@ -33,7 +34,7 @@ export interface Container {
   /** Publishes finished websites to GitHub Pages; undefined without a token. */
   sitePublisher: SitePublisher | undefined;
   /** Content calendar storage and (when Cloudflare is configured) media generation. */
-  content: { store: ContentStore; media: MediaGenerator | undefined };
+  content: { store: ContentStore; media: MediaGenerator | undefined; video: ReelMaker | undefined };
   shutdown(): Promise<void>;
 }
 
@@ -175,6 +176,8 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
   const cloudflare = config.cloudflareAccountId !== undefined && config.cloudflareApiToken !== undefined ? new CloudflareMedia(config.cloudflareAccountId, config.cloudflareApiToken) : undefined;
   const gemini = config.geminiApiKey !== undefined ? new GeminiVoice(config.geminiApiKey, config.geminiTtsModel) : undefined;
   const media = buildMedia({ cloudflare, gemini });
+  const video = ffmpegAvailable() ? createReelMaker() : undefined;
+  if (video === undefined) logger.warn('ffmpeg not found: video creation is off');
   if (cloudflare === undefined && (config.cloudflareAccountId !== undefined || config.cloudflareApiToken !== undefined)) {
     logger.warn('image and voice generation need both CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN: it is off');
   }
@@ -190,7 +193,7 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     missions,
     madre,
     sitePublisher,
-    content: { store: contentStore, media },
+    content: { store: contentStore, media, video },
     async shutdown() {
       logger.info('draining job queue');
       await queue.stop(15_000);

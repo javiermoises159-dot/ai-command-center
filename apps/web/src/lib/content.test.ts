@@ -5,7 +5,7 @@ import { bucketOf, groupContent, isoToLocalInput, localInputToIso, type ContentI
 
 const base: ContentItem = {
   id: '1', title: 't', caption: '', platform: 'instagram', status: 'scheduled', scheduledAt: null, publishedAt: null,
-  imagePrompt: '', voiceText: '', hasImage: false, hasAudio: false, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+  imagePrompt: '', voiceText: '', hasImage: false, hasAudio: false, hasVideo: false, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
 };
 const NOW = Date.parse('2026-10-01T12:00:00Z');
 

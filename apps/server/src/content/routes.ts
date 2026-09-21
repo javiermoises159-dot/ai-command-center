@@ -4,12 +4,15 @@ import { DomainError } from '@acc/domain';
 
 import { json, type Route } from '../http/types.ts';
 import { ALL_VOICE_LANGS, MediaError, type MediaGenerator, type VoiceLang } from './media.ts';
+import type { ReelMaker } from './video.ts';
 import { PLATFORMS, STATUSES, type ContentInput, type ContentPatch, type ContentStore, type MediaKind, type Platform, type ContentStatus } from './store.ts';
 
 export interface ContentDeps {
   store: ContentStore;
   /** Absent when Cloudflare is not configured: the calendar still works, media does not. */
   media: MediaGenerator | undefined;
+  /** Builds the vertical video with ffmpeg; undefined when ffmpeg is not installed. */
+  video?: ReelMaker | undefined;
 }
 
 const invalid = (message: string) => new DomainError('validation_error', message, { status: 400, publicMessage: message });
@@ -82,8 +85,9 @@ export function parsePatch(body: unknown): ContentPatch {
 }
 
 function mediaKind(value: string | undefined): MediaKind {
-  if (value === 'image' || value === 'audio') return value;
-  throw invalid('El tipo de archivo debe ser image o audio.');
+  // The value is also used to pick a database column, so it must stay a closed list.
+  if (value === 'image' || value === 'audio' || value === 'video') return value;
+  throw invalid('El tipo de archivo debe ser image, audio o video.');
 }
 
 export function contentRoutes(deps: ContentDeps): Route[] {
@@ -111,7 +115,7 @@ export function contentRoutes(deps: ContentDeps): Route[] {
     {
       method: 'GET',
       pattern: '/api/content/status',
-      handler: async () => json(200, { media: { image: deps.media?.image != null, voiceLangs: deps.media?.voice?.langs ?? [] } }),
+      handler: async () => json(200, { media: { image: deps.media?.image != null, voiceLangs: deps.media?.voice?.langs ?? [], video: deps.video !== undefined } }),
     },
     { method: 'GET', pattern: '/api/content', handler: async () => json(200, { items: await deps.store.list() }) },
     { method: 'POST', pattern: '/api/content', handler: async (request) => json(201, { item: await deps.store.create(parseCreate(request.body)) }) },
@@ -172,6 +176,23 @@ export function contentRoutes(deps: ContentDeps): Route[] {
         const media = await run(() => voice.speak(voiceText, lang));
         await deps.store.update(id, { voiceText });
         return json(200, { item: await deps.store.setMedia(id, 'audio', media) });
+      },
+    },
+    {
+      method: 'POST',
+      pattern: '/api/content/:id/video',
+      handler: async (_request, params) => {
+        const makeReel = deps.video;
+        if (makeReel === undefined) {
+          throw new DomainError('conflict', 'Video is not available.', { status: 409, publicMessage: 'El servidor no tiene ffmpeg instalado, así que todavía no puede crear vídeos.' });
+        }
+        const id = param(params, 'id');
+        const item = await deps.store.get(id);
+        if (item === null) throw notFound();
+        const [image, audio] = await Promise.all([deps.store.getMedia(id, 'image'), deps.store.getMedia(id, 'audio')]);
+        if (image === null || audio === null) throw invalid('Para crear el vídeo primero genera la imagen y la voz.');
+        const video = await run(() => makeReel({ image, audio, text: item.voiceText }));
+        return json(200, { item: await deps.store.setMedia(id, 'video', video) });
       },
     },
   ];

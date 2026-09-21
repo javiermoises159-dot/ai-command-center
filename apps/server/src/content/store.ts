@@ -21,7 +21,7 @@ function publishedAtFor(status: ContentStatus, previous: string | null): string 
 }
 
 export class MemoryContentStore implements ContentStore {
-  private readonly items = new Map<string, { item: ContentItem; image: Media | null; audio: Media | null }>();
+  private readonly items = new Map<string, { item: ContentItem; image: Media | null; audio: Media | null; video: Media | null }>();
 
   async list(): Promise<ContentItem[]> {
     return [...this.items.values()].map((e) => e.item).sort(byDate);
@@ -44,10 +44,11 @@ export class MemoryContentStore implements ContentStore {
       voiceText: input.voiceText ?? '',
       hasImage: false,
       hasAudio: false,
+      hasVideo: false,
       createdAt: now,
       updatedAt: now,
     };
-    this.items.set(item.id, { item, image: null, audio: null });
+    this.items.set(item.id, { item, image: null, audio: null, video: null });
     return item;
   }
   async update(id: string, patch: ContentPatch): Promise<ContentItem | null> {
@@ -64,14 +65,13 @@ export class MemoryContentStore implements ContentStore {
   async setMedia(id: string, kind: MediaKind, media: Media): Promise<ContentItem | null> {
     const entry = this.items.get(id);
     if (entry === undefined) return null;
-    if (kind === 'image') entry.image = media;
-    else entry.audio = media;
-    entry.item = { ...entry.item, hasImage: entry.image !== null, hasAudio: entry.audio !== null, updatedAt: new Date().toISOString() };
+    entry[kind] = media;
+    entry.item = { ...entry.item, hasImage: entry.image !== null, hasAudio: entry.audio !== null, hasVideo: entry.video !== null, updatedAt: new Date().toISOString() };
     return entry.item;
   }
   async getMedia(id: string, kind: MediaKind): Promise<Media | null> {
     const entry = this.items.get(id);
-    return (kind === 'image' ? entry?.image : entry?.audio) ?? null;
+    return entry?.[kind] ?? null;
   }
 }
 

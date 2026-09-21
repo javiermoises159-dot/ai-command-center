@@ -37,6 +37,7 @@ export interface ContentItem {
   voiceText: string;
   hasImage: boolean;
   hasAudio: boolean;
+  hasVideo: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,6 +73,7 @@ export const listContent = async () => (await call<{ items: ContentItem[] }>('GE
 export interface MediaStatus {
   image: boolean;
   voiceLangs: VoiceLang[];
+  video: boolean;
 }
 export const mediaStatus = async () => (await call<{ media: MediaStatus }>('GET', '/api/content/status')).media;
 export const createContent = async (input: NewContent) => (await call<{ item: ContentItem }>('POST', '/api/content', input)).item;
@@ -82,7 +84,8 @@ export const generateImage = async (id: string, prompt: string) =>
   (await call<{ item: ContentItem }>('POST', `/api/content/${encodeURIComponent(id)}/image`, { prompt })).item;
 export const generateVoice = async (id: string, text: string, lang: VoiceLang) =>
   (await call<{ item: ContentItem }>('POST', `/api/content/${encodeURIComponent(id)}/voice`, { text, lang })).item;
-export const getMedia = (id: string, kind: 'image' | 'audio') => call<{ mime: string; base64: string }>('GET', `/api/content/${encodeURIComponent(id)}/media/${kind}`);
+export const generateVideo = async (id: string) => (await call<{ item: ContentItem }>('POST', `/api/content/${encodeURIComponent(id)}/video`)).item;
+export const getMedia = (id: string, kind: 'image' | 'audio' | 'video') => call<{ mime: string; base64: string }>('GET', `/api/content/${encodeURIComponent(id)}/media/${kind}`);
 
 /** Which list an item belongs in. A scheduled item whose time has come is "due". */
 export type Bucket = 'due' | 'scheduled' | 'draft' | 'published';
@@ -121,16 +124,16 @@ export function base64ToBlob(base64: string, mime: string): Blob {
   return new Blob([bytes], { type: mime });
 }
 
-const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'audio/mpeg': 'mp3', 'audio/wav': 'wav' };
+const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'video/mp4': 'mp4' };
 
 /**
  * Hand a piece to the phone's share sheet (picture + text) so it can go to the
  * chosen app with one more tap. Falls back to copying the text. Nothing is
  * posted on the person's behalf.
  */
-export async function shareContent(item: ContentItem, image: { base64: string; mime: string } | null): Promise<'shared' | 'copied' | 'cancelled'> {
+export async function shareContent(item: ContentItem, media: { base64: string; mime: string } | null): Promise<'shared' | 'copied' | 'cancelled'> {
   const text = item.caption;
-  const files = image === null ? [] : [new File([base64ToBlob(image.base64, image.mime)], `${item.title.slice(0, 40) || 'contenido'}.${EXTENSIONS[image.mime] ?? 'jpg'}`, { type: image.mime })];
+  const files = media === null ? [] : [new File([base64ToBlob(media.base64, media.mime)], `${item.title.slice(0, 40) || 'contenido'}.${EXTENSIONS[media.mime] ?? 'jpg'}`, { type: media.mime })];
   try {
     if (files.length > 0 && navigator.canShare?.({ files }) === true) {
       await navigator.share({ files, text });

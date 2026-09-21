@@ -85,7 +85,8 @@ describe('content calendar', () => {
     assert.equal('imageB64' in listed, false);
     const image = (await call('GET', `/api/content/${item.id}/media/image`)).body;
     assert.equal(Buffer.from(image.base64, 'base64').toString(), 'img:galletas de chocolate');
-    assert.equal((await call('GET', `/api/content/${item.id}/media/video`)).status, 400);
+    assert.equal((await call('GET', `/api/content/${item.id}/media/video`)).status, 404, 'a valid kind with nothing stored yet');
+    assert.equal((await call('GET', `/api/content/${item.id}/media/document`)).status, 400, 'the kind is a closed list');
   });
 
   it('needs a description before generating, and says so when Cloudflare is not configured', async () => {
@@ -101,8 +102,8 @@ describe('content calendar', () => {
     const res = await off('POST', `/api/content/${made.id}/image`, {});
     assert.equal(res.status, 409);
     assert.match(JSON.stringify(res.body), /CLOUDFLARE_API_TOKEN/);
-    assert.deepEqual((await off('GET', '/api/content/status')).body.media, { image: false, voiceLangs: [] });
-    assert.deepEqual((await api()('GET', '/api/content/status')).body.media, { image: true, voiceLangs: ['es', 'it', 'en'] });
+    assert.deepEqual((await off('GET', '/api/content/status')).body.media, { image: false, voiceLangs: [], video: false });
+    assert.deepEqual((await api()('GET', '/api/content/status')).body.media, { image: true, voiceLangs: ['es', 'it', 'en'], video: false });
   });
 
   it('shows the media provider\'s own message when it fails', async () => {

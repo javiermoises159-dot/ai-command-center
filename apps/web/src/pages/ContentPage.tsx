@@ -8,6 +8,7 @@ import {
   createContent,
   deleteContent,
   generateImage,
+  generateVideo,
   generateVoice,
   getMedia,
   groupContent,
@@ -178,6 +179,8 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [imageData, setImageData] = useState<{ base64: string; mime: string } | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoData, setVideoData] = useState<{ base64: string; mime: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -213,11 +216,25 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
     } else {
       setAudioUrl(null);
     }
+    if (item.hasVideo) {
+      getMedia(item.id, 'video')
+        .then((m) => {
+          if (cancelled) return;
+          const url = URL.createObjectURL(base64ToBlob(m.base64, m.mime));
+          urls.push(url);
+          setVideoUrl(url);
+          setVideoData(m);
+        })
+        .catch(() => undefined);
+    } else {
+      setVideoUrl(null);
+      setVideoData(null);
+    }
     return () => {
       cancelled = true;
       urls.forEach((u) => URL.revokeObjectURL(u));
     };
-  }, [open, item.id, item.hasImage, item.hasAudio, item.updatedAt]);
+  }, [open, item.id, item.hasImage, item.hasAudio, item.hasVideo, item.updatedAt]);
 
   async function run(name: string, work: () => Promise<ContentItem | void>) {
     setBusy(name);
@@ -245,7 +262,8 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
     run('share', async () => {
       // Save the latest text first so what is shared is what is on screen.
       await updateContent(item.id, { caption });
-      const outcome = await shareContent({ ...item, caption }, imageData);
+      // A finished video is what gets shared; without one, the picture.
+      const outcome = await shareContent({ ...item, caption }, videoData ?? imageData);
       if (outcome === 'cancelled') return;
       setInfo(outcome === 'copied' ? 'El texto está copiado. Pégalo en la app donde vayas a publicar.' : 'Enviado a tu app. Cuando lo hayas publicado, márcalo como publicado.');
     });
@@ -301,6 +319,24 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
             <Button variant="ghost" disabled={lang === null || voiceText.trim() === ''} busy={busy === 'voice'} onClick={() => lang !== null && void run('voice', () => generateVoice(item.id, voiceText, lang))}>
               {item.hasAudio ? 'Generar otra voz' : 'Generar voz'}
             </Button>
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-[var(--color-line)] p-3">
+            <p className={LABEL}>Vídeo vertical para Reels</p>
+            <p className="text-[0.75rem] text-[var(--color-ink-faint)]">Junta la imagen, la voz y el texto como subtítulos (9:16). Necesita tener ya la imagen y la voz. Si cambias alguna, vuelve a crearlo.</p>
+            {videoUrl !== null && <video controls playsInline src={videoUrl} className="max-h-[28rem] w-full rounded-xl bg-black" />}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="ghost" disabled={media?.video !== true || !item.hasImage || !item.hasAudio} busy={busy === 'video'} onClick={() => void run('video', () => generateVideo(item.id))}>
+                {item.hasVideo ? 'Crear el vídeo otra vez' : 'Crear vídeo'}
+              </Button>
+              {videoUrl !== null && (
+                <a href={videoUrl} download={`${item.title.slice(0, 40) || 'reel'}.mp4`} className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[var(--color-edge-bright)] px-4 text-sm text-[var(--color-ink)]">
+                  Descargar
+                </a>
+              )}
+            </div>
+            {media !== null && !media.video && <p className="text-[0.75rem] text-[var(--color-ink-faint)]">Este servidor todavía no tiene ffmpeg instalado.</p>}
+            {busy === 'video' && <p className="text-[0.75rem] text-[var(--color-ink-faint)]">Creando el vídeo: puede tardar hasta un minuto.</p>}
           </div>
 
           {error !== null && <p role="alert" className="text-[0.82rem] text-rose-500">{error}</p>}
