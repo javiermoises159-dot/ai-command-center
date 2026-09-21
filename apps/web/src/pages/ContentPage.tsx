@@ -277,9 +277,9 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
 
           <div className="space-y-2 rounded-xl border border-[var(--color-line)] p-3">
             <Field label="Imagen: descríbela" id={`img-${item.id}`}>
-              <textarea id={`img-${item.id}`} rows={2} className={`${FIELD} py-2`} placeholder="Ej.: Close-up photo of chocolate chip cookies on a rustic wooden table, warm light" value={imagePrompt} maxLength={1500} onChange={(e) => setImagePrompt(e.target.value)} />
+              <textarea id={`img-${item.id}`} rows={2} className={`${FIELD} py-2`} placeholder="Ej.: Primer plano de galletas con chips de chocolate sobre una mesa de madera rústica, luz cálida" value={imagePrompt} maxLength={1500} onChange={(e) => setImagePrompt(e.target.value)} />
             </Field>
-            <p className="text-[0.75rem] text-[var(--color-ink-faint)]">Escríbela en inglés: el generador gratuito entiende mucho mejor el inglés que el español.</p>
+            <p className="text-[0.75rem] text-[var(--color-ink-faint)]">Escríbela en español o italiano: se traduce sola antes de generar la imagen. Cuantos más detalles (fondo, luz, colores), mejor.</p>
             {imageUrl !== null && <img src={imageUrl} alt={item.title} className="max-h-80 w-full rounded-xl object-contain" />}
             <Button variant="ghost" disabled={media?.image !== true || imagePrompt.trim() === ''} busy={busy === 'image'} onClick={() => void run('image', () => generateImage(item.id, imagePrompt))}>
               {item.hasImage ? 'Generar otra imagen' : 'Generar imagen'}

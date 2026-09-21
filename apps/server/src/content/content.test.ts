@@ -6,7 +6,7 @@ import type { MissionService } from '@acc/orchestrator';
 import { ProviderRegistry } from '@acc/providers';
 
 import { createRouter } from '../http/router.ts';
-import { buildMedia, CloudflareMedia, GeminiVoice, MediaError, pcmToWavBase64, type Fetch, type MediaGenerator } from './media.ts';
+import { buildMedia, CloudflareMedia, GeminiVoice, MediaError, pcmToWavBase64, TRANSLATE_MODEL, type Fetch, type MediaGenerator } from './media.ts';
 import { MemoryContentStore } from './store.ts';
 
 const fakeMedia: MediaGenerator = {
@@ -138,6 +138,31 @@ describe('CloudflareMedia', () => {
     await assert.rejects(new CloudflareMedia('a', 't', reply(429, {})).image('x'), /cupo gratuito/);
     await assert.rejects(new CloudflareMedia('a', 't', reply(400, { errors: [{ message: 'bad prompt' }] })).image('x'), /bad prompt/);
     await assert.rejects(new CloudflareMedia('a', 't', reply(200, { result: {} })).image('x'), /ninguna imagen/);
+  });
+});
+
+describe('picture prompts are translated to English first', () => {
+  const sent: { url: string; body: any }[] = [];
+  const fake = (translation: unknown): Fetch => async (url, init) => {
+    sent.push({ url, body: JSON.parse(init.body) });
+    if (url.endsWith(TRANSLATE_MODEL)) return translation === 'fail' ? { ok: false, status: 500, text: async () => '{}' } : { ok: true, status: 200, text: async () => JSON.stringify({ result: { response: translation } }) };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ result: { image: '/9j/AAAA' } }) };
+  };
+
+  it('sends the English text to the picture model', async () => {
+    sent.length = 0;
+    await new CloudflareMedia('a', 't', fake('"Close-up of chocolate chip cookies on a rustic wooden table"')).image('Primer plano de galletas con chips sobre mesa de madera');
+    assert.equal(sent[1]?.body.prompt, 'Close-up of chocolate chip cookies on a rustic wooden table');
+    assert.match(sent[0]?.body.messages[1].content, /galletas/);
+  });
+
+  it('falls back to the original text when translating fails or answers nothing', async () => {
+    sent.length = 0;
+    await new CloudflareMedia('a', 't', fake('fail')).image('galletas');
+    assert.equal(sent[1]?.body.prompt, 'galletas');
+    sent.length = 0;
+    await new CloudflareMedia('a', 't', fake('   ')).image('biscotti');
+    assert.equal(sent[1]?.body.prompt, 'biscotti');
   });
 });
 

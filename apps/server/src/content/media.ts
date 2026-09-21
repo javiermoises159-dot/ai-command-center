@@ -1,7 +1,7 @@
 /**
  * Picture and voice generation, both on free tiers.
  *
- *  - Pictures: Cloudflare Workers AI (FLUX schnell).
+ *  - Pictures: Cloudflare Workers AI (FLUX schnell), after translating the description to English.
  *  - Voice: Gemini text-to-speech (Spanish, Italian, English, French, German,
  *    Portuguese) when a Gemini key is present; otherwise Cloudflare MeloTTS, which
  *    on Workers AI only accepts English and French.
@@ -13,6 +13,7 @@
 import type { Media } from './store.ts';
 
 export const IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
+export const TRANSLATE_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 export const CLOUDFLARE_VOICE_MODEL = '@cf/myshell-ai/melotts';
 export const DEFAULT_GEMINI_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
@@ -49,10 +50,35 @@ export class CloudflareMedia {
   ) {}
 
   async image(prompt: string): Promise<Media> {
-    const data = await this.run(IMAGE_MODEL, { prompt: prompt.slice(0, 2000), steps: 6 });
+    // The picture model understands English far better than Spanish or Italian, and
+    // the person should not need English: translate first. If that step fails the
+    // original text is used, so a translation hiccup never blocks a picture.
+    const english = await this.toEnglish(prompt);
+    const data = await this.run(IMAGE_MODEL, { prompt: english.slice(0, 2000), steps: 6 });
     const image = pick(data, 'image');
     if (image === null) throw new MediaError('Cloudflare no devolvió ninguna imagen. Prueba con otra descripción.');
     return { mime: image.startsWith('/9j/') ? 'image/jpeg' : 'image/png', base64: image };
+  }
+
+  /** A description in any language, as an English prompt for the picture model. Never throws. */
+  async toEnglish(prompt: string): Promise<string> {
+    try {
+      const data = await this.run(TRANSLATE_MODEL, {
+        max_tokens: 200,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You write prompts for an image generator. Translate the user text into natural English, keeping every detail, and add nothing else. Reply with the English prompt only, on one line, without quotes or comments.',
+          },
+          { role: 'user', content: prompt.slice(0, 1000) },
+        ],
+      });
+      const said = pick(data, 'response')?.trim().replace(/^["'“]+|["'”]+$/g, '');
+      return said !== undefined && said !== '' && said.length < 1500 ? said : prompt;
+    } catch {
+      return prompt;
+    }
   }
 
   async voice(text: string, lang: VoiceLang): Promise<Media> {
