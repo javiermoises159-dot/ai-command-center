@@ -19,6 +19,7 @@ import { api, ApiClientError } from '../lib/api.ts';
 import { href, useRouter } from '../lib/router.tsx';
 import { useAgentCatalog, useMission } from '../hooks/useApi.ts';
 import { useMissionMadre } from '../hooks/useMadre.ts';
+import { ContentPanel } from '../components/ContentPanel.tsx';
 import { SitePanel } from '../components/SitePanel.tsx';
 import { RunPanel } from '../components/madre/RunPanel.tsx';
 import { t } from '../i18n/index.ts';
@@ -306,6 +307,7 @@ export function MissionPage({ id }: { id: string }) {
             </section>
           )}
 
+          {activeRun?.finalResult != null && <ContentPanel missionId={detail.id} />}
           {activeRun?.finalResult != null && <SitePanel missionId={detail.id} finalResult={activeRun.finalResult} />}
 
           {activeRun?.finalResult == null && activeRun?.status === 'failed' && (

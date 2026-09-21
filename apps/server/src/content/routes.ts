@@ -4,6 +4,7 @@ import { DomainError } from '@acc/domain';
 
 import { json, type Route } from '../http/types.ts';
 import { ALL_VOICE_LANGS, MediaError, type MediaGenerator, type VoiceLang } from './media.ts';
+import type { PieceDrafter } from './draft.ts';
 import type { ReelMaker } from './video.ts';
 import { PLATFORMS, STATUSES, type ContentInput, type ContentPatch, type ContentStore, type MediaKind, type Platform, type ContentStatus } from './store.ts';
 
@@ -13,6 +14,8 @@ export interface ContentDeps {
   media: MediaGenerator | undefined;
   /** Builds the vertical video with ffmpeg; undefined when ffmpeg is not installed. */
   video?: ReelMaker | undefined;
+  /** Writes content pieces from a mission report. */
+  drafter?: PieceDrafter | undefined;
 }
 
 const invalid = (message: string) => new DomainError('validation_error', message, { status: 400, publicMessage: message });

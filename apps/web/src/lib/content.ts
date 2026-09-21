@@ -168,3 +168,6 @@ export async function shareContent(item: ContentItem, media: { base64: string; m
   await navigator.clipboard.writeText(text);
   return 'copied';
 }
+
+/** Ask the crew's report to be turned into draft pieces in the calendar. */
+export const draftFromMission = (missionId: string) => call<{ items: ContentItem[] }>('POST', `/api/missions/${encodeURIComponent(missionId)}/content`);

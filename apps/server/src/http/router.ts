@@ -21,6 +21,7 @@ import type { MadreService } from '@acc/madre';
 import type { MissionService } from '@acc/orchestrator';
 import type { ProviderRegistry } from '@acc/providers';
 
+import { DraftError } from '../content/draft.ts';
 import { contentRoutes, type ContentDeps } from '../content/routes.ts';
 import { madreRoutes } from './madre-routes.ts';
 import { PublishError, type SitePublisher } from '../publish/github-pages.ts';
@@ -200,6 +201,34 @@ export function createRouter(deps: RouterDeps): Router {
     },
 
     ...(deps.content !== undefined ? contentRoutes(deps.content) : []),
+
+    {
+      // "Enviar a Contenidos": the mission's report becomes draft pieces in the calendar.
+      method: 'POST',
+      pattern: '/api/missions/:id/content',
+      handler: async (_request, params) => {
+        const content = deps.content;
+        if (content?.drafter === undefined) {
+          throw new DomainError('conflict', 'Content drafting is not available.', { status: 409, publicMessage: 'La creación de piezas no está disponible en este servidor.' });
+        }
+        const detail = await deps.missions.get(requireParam(params, 'id'));
+        const runs = [...detail.runs].map((r) => r.run).sort((a, b) => b.attempt - a.attempt);
+        const report = runs.find((r) => r.finalResult != null && r.finalResult.trim() !== '')?.finalResult ?? null;
+        if (report === null) {
+          throw new DomainError('not_found', 'No report in this mission.', { status: 404, publicMessage: 'Esta misión todavía no tiene un informe final del que sacar piezas.' });
+        }
+        try {
+          const drafts = await content.drafter(report);
+          const items = [];
+          for (const draft of drafts) items.push(await content.store.create(draft));
+          log.info('content pieces created from a mission', { missionId: detail.mission.id, count: items.length });
+          return json(201, { items });
+        } catch (error) {
+          if (error instanceof DraftError) throw new DomainError('provider_failed', error.message, { status: error.status, publicMessage: error.message });
+          throw error;
+        }
+      },
+    },
     ...(deps.madre !== undefined ? madreRoutes(deps.madre) : []),
   ];
 

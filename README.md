@@ -442,3 +442,7 @@ Deliberately **not** built yet, to keep the core honest:
   for now because every agent currently consumes its predecessors
 - Tools: image / video / voice generation, web search, storage, GitHub, social
 - Authentication and multi-tenancy — there is no user model yet
+
+### Send a report to the calendar / download audio
+
+On a finished mission, **Crear piezas en Contenidos** asks a real AI provider (never the simulator) to turn the report into draft pieces (`POST /api/missions/:id/content`). Each piece's voice can be downloaded as an audio file from the Contenidos screen.

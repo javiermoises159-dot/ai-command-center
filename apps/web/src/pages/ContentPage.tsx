@@ -178,6 +178,7 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
   const [when_, setWhen] = useState(isoToLocalInput(item.scheduledAt));
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioExt, setAudioExt] = useState('wav');
   const [imageData, setImageData] = useState<{ base64: string; mime: string } | null>(null);
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
@@ -213,6 +214,7 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
           const url = URL.createObjectURL(base64ToBlob(m.base64, m.mime));
           urls.push(url);
           setAudioUrl(url);
+          setAudioExt(m.mime.includes('mpeg') ? 'mp3' : 'wav');
         })
         .catch(() => undefined);
     } else {
@@ -318,6 +320,11 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
             {langs.length === 0 && <p className="text-[0.75rem] text-[var(--color-ink-faint)]">La voz no está activada: falta GEMINI_API_KEY en Render.</p>}
             {langs.length > 0 && !langs.includes('es') && <p className="text-[0.75rem] text-[var(--color-ink-faint)]">Con esta voz solo hay inglés y francés. Para español e italiano añade GEMINI_API_KEY en Render.</p>}
             {audioUrl !== null && <audio controls src={audioUrl} className="w-full" />}
+            {audioUrl !== null && (
+              <a href={audioUrl} download={`${item.title.slice(0, 40) || 'voz'}.${audioExt}`} className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[var(--color-edge-bright)] px-4 text-sm text-[var(--color-ink)]">
+                Descargar audio
+              </a>
+            )}
             <Button variant="ghost" disabled={lang === null || voiceText.trim() === ''} busy={busy === 'voice'} onClick={() => lang !== null && void run('voice', () => generateVoice(item.id, voiceText, lang))}>
               {item.hasAudio ? 'Generar otra voz' : 'Generar voz'}
             </Button>
