@@ -93,6 +93,11 @@ export const videoStatus = (id: string) => call<{ state: 'idle' | 'running' | 'f
  */
 export async function makeVideo(id: string, alive: () => boolean = () => true, pollMs = 3_000, maxMs = 10 * 60_000): Promise<ContentItem> {
   await startVideo(id);
+  return waitForVideo(id, alive, pollMs, maxMs);
+}
+
+/** Poll a video that is already being made until it is ready, failed or the wait runs out. */
+export async function waitForVideo(id: string, alive: () => boolean = () => true, pollMs = 3_000, maxMs = 10 * 60_000): Promise<ContentItem> {
   const deadline = Date.now() + maxMs;
   while (alive() && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, pollMs));
@@ -171,3 +176,6 @@ export async function shareContent(item: ContentItem, media: { base64: string; m
 
 /** Ask the crew's report to be turned into draft pieces in the calendar. */
 export const draftFromMission = (missionId: string) => call<{ items: ContentItem[] }>('POST', `/api/missions/${encodeURIComponent(missionId)}/content`);
+
+/** "Créame un logo": the server's AI prepares the brief and the real generators make it. */
+export const createInStudio = (request: string) => call<{ item: ContentItem; notes: string[]; videoStarted: boolean }>('POST', '/api/content/studio', { request });

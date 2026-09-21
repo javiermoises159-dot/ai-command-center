@@ -5,6 +5,7 @@ import { DomainError } from '@acc/domain';
 import { json, type Route } from '../http/types.ts';
 import { ALL_VOICE_LANGS, MediaError, type MediaGenerator, type VoiceLang } from './media.ts';
 import type { PieceDrafter } from './draft.ts';
+import type { StudioBriefer } from './studio.ts';
 import type { ReelMaker } from './video.ts';
 import { PLATFORMS, STATUSES, type ContentInput, type ContentPatch, type ContentStore, type MediaKind, type Platform, type ContentStatus } from './store.ts';
 
@@ -16,6 +17,8 @@ export interface ContentDeps {
   video?: ReelMaker | undefined;
   /** Writes content pieces from a mission report. */
   drafter?: PieceDrafter | undefined;
+  /** Turns a free-text request into what the studio should generate. */
+  studio?: StudioBriefer | undefined;
 }
 
 const invalid = (message: string) => new DomainError('validation_error', message, { status: 400, publicMessage: message });
@@ -116,11 +119,81 @@ export function contentRoutes(deps: ContentDeps): Route[] {
   // Videos being made right now (kept in memory: a restart simply loses an unfinished one).
   const videoJobs = new Map<string, { state: 'running' | 'failed'; message: string | null }>();
 
+  const startVideoJob = async (id: string, voiceText: string): Promise<void> => {
+    const makeReel = deps.video;
+    if (makeReel === undefined) return;
+    const [image, audio] = await Promise.all([deps.store.getMedia(id, 'image'), deps.store.getMedia(id, 'audio')]);
+    if (image === null || audio === null) throw invalid('Para crear el vídeo primero genera la imagen y la voz.');
+    videoJobs.set(id, { state: 'running', message: null });
+    void makeReel({ image, audio, text: voiceText })
+      .then(async (video) => {
+        await deps.store.setMedia(id, 'video', video);
+        videoJobs.delete(id);
+      })
+      .catch((error: unknown) => {
+        videoJobs.set(id, { state: 'failed', message: error instanceof Error ? error.message : 'No se pudo crear el vídeo.' });
+      });
+  };
+
   return [
     {
       method: 'GET',
       pattern: '/api/content/status',
       handler: async () => json(200, { media: { image: deps.media?.image != null, voiceLangs: deps.media?.voice?.langs ?? [], video: deps.video !== undefined } }),
+    },
+    {
+      // "Créame un logo": the AI writes the brief, then the real generators make the
+      // picture / voice, and a video starts in the background when one was asked for.
+      method: 'POST',
+      pattern: '/api/content/studio',
+      handler: async (request) => {
+        if (deps.studio === undefined) throw new DomainError('conflict', 'Studio unavailable.', { status: 409, publicMessage: 'No hay ninguna IA real conectada para preparar la creación.' });
+        const ask = text((request.body as { request?: unknown } | undefined)?.request, 'lo que quieres crear', 2000, true) ?? '';
+        let brief;
+        try {
+          brief = await deps.studio(ask);
+        } catch (error) {
+          if (error instanceof Error && error.name === 'DraftError') {
+            const status = (error as { status?: number }).status ?? 502;
+            throw new DomainError('provider_failed', error.message, { status, publicMessage: error.message });
+          }
+          throw error;
+        }
+        let item = await deps.store.create({ title: brief.title, platform: brief.platform, caption: brief.caption, voiceText: brief.voiceText, imagePrompt: brief.imagePrompt });
+        const notes: string[] = [];
+        let videoStarted = false;
+        if (brief.wants.includes('image')) {
+          if (deps.media?.image == null) notes.push('La imagen no se pudo crear: falta conectar Cloudflare.');
+          else {
+            try {
+              item = (await deps.store.setMedia(item.id, 'image', await deps.media.image(brief.imagePrompt))) ?? item;
+            } catch (error) {
+              notes.push(`La imagen no se pudo crear: ${error instanceof Error ? error.message : 'error'}`);
+            }
+          }
+        }
+        if (brief.wants.includes('voice')) {
+          const voice = deps.media?.voice;
+          if (voice == null) notes.push('La voz no se pudo crear: falta conectar Gemini.');
+          else {
+            const lang = voice.langs.includes(brief.lang) ? brief.lang : voice.langs[0];
+            try {
+              if (lang === undefined) throw new MediaError('No hay idiomas de voz disponibles.');
+              item = (await deps.store.setMedia(item.id, 'audio', await voice.speak(brief.voiceText, lang))) ?? item;
+            } catch (error) {
+              notes.push(`La voz no se pudo crear: ${error instanceof Error ? error.message : 'error'}`);
+            }
+          }
+        }
+        if (brief.wants.includes('video')) {
+          if (deps.video === undefined) notes.push('El vídeo no se pudo crear: el servidor no tiene ffmpeg.');
+          else if (item.hasImage && item.hasAudio) {
+            await startVideoJob(item.id, brief.voiceText);
+            videoStarted = true;
+          } else notes.push('El vídeo no se pudo crear porque falló la imagen o la voz.');
+        }
+        return json(201, { item, notes, videoStarted });
+      },
     },
     { method: 'GET', pattern: '/api/content', handler: async () => json(200, { items: await deps.store.list() }) },
     { method: 'POST', pattern: '/api/content', handler: async (request) => json(201, { item: await deps.store.create(parseCreate(request.body)) }) },
@@ -197,17 +270,7 @@ export function contentRoutes(deps: ContentDeps): Route[] {
         const item = await deps.store.get(id);
         if (item === null) throw notFound();
         if (videoJobs.get(id)?.state === 'running') return json(202, { job: videoJobs.get(id) });
-        const [image, audio] = await Promise.all([deps.store.getMedia(id, 'image'), deps.store.getMedia(id, 'audio')]);
-        if (image === null || audio === null) throw invalid('Para crear el vídeo primero genera la imagen y la voz.');
-        videoJobs.set(id, { state: 'running', message: null });
-        void makeReel({ image, audio, text: item.voiceText })
-          .then(async (video) => {
-            await deps.store.setMedia(id, 'video', video);
-            videoJobs.delete(id);
-          })
-          .catch((error: unknown) => {
-            videoJobs.set(id, { state: 'failed', message: error instanceof Error ? error.message : 'No se pudo crear el vídeo.' });
-          });
+        await startVideoJob(id, item.voiceText);
         return json(202, { job: videoJobs.get(id) });
       },
     },

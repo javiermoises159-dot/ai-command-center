@@ -446,3 +446,7 @@ Deliberately **not** built yet, to keep the core honest:
 ### Send a report to the calendar / download audio
 
 On a finished mission, **Crear piezas en Contenidos** asks a real AI provider (never the simulator) to turn the report into draft pieces (`POST /api/missions/:id/content`). Each piece's voice can be downloaded as an audio file from the Contenidos screen.
+
+### Creative studio
+
+In **Creatividad**, type what you want ("un logo para mi tienda", "un reel…"). `POST /api/content/studio` has a real AI provider write the brief, then runs the real generators (Cloudflare picture, Gemini voice, ffmpeg video) and saves the result as a draft in the calendar. Videos are built from one still per caption joined with ffmpeg's concat demuxer, which is cheap enough for a free server.

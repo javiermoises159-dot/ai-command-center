@@ -4,8 +4,8 @@ export const creative = {
   description:
     'La futura suite creativa: diseño, imágenes, vídeo y un lienzo compartido, todo a partir de lo que tus misiones ya han decidido.',
   notice: {
-    title: 'Los editores aún no están disponibles',
-    body: 'Nada de lo que aparece abajo puede crear ni editar un recurso hoy. «Flujos» muestra lo que necesitaría cada fase y si podría ejecutarse ahora, y «Proyectos recientes» enumera los briefs de diseño que tu agente de Diseño ya ha redactado.',
+    title: 'Los editores avanzados aún no están disponibles',
+    body: 'El estudio de arriba ya crea imágenes, logos, voces y vídeos de verdad. Lo que aparece más abajo (editor de diseño, lienzo, plantillas) todavía no crea ni edita nada. «Flujos» muestra lo que necesitaría cada fase y si podría ejecutarse ahora, y «Proyectos recientes» enumera los briefs de diseño que tu agente de Diseño ya ha redactado.',
   },
   pipelines: { title: 'Flujos', badge: 'Estado en vivo' },
   create: {

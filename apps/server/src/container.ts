@@ -19,6 +19,7 @@ import { createRepositories } from '@acc/repositories';
 import type { ServerConfig } from './config.ts';
 import { GitHubPagesPublisher, parseRepo, type SitePublisher } from './publish/github-pages.ts';
 import { buildMedia, CloudflareMedia, GeminiVoice, type MediaGenerator } from './content/media.ts';
+import { createStudioBriefer, type StudioBriefer } from './content/studio.ts';
 import { createPieceDrafter, type PieceDrafter } from './content/draft.ts';
 import { createReelMaker, ffmpegAvailable, type ReelMaker } from './content/video.ts';
 import { MemoryContentStore, type ContentStore } from './content/store.ts';
@@ -35,7 +36,7 @@ export interface Container {
   /** Publishes finished websites to GitHub Pages; undefined without a token. */
   sitePublisher: SitePublisher | undefined;
   /** Content calendar storage and (when Cloudflare is configured) media generation. */
-  content: { store: ContentStore; media: MediaGenerator | undefined; video: ReelMaker | undefined; drafter: PieceDrafter };
+  content: { store: ContentStore; media: MediaGenerator | undefined; video: ReelMaker | undefined; drafter: PieceDrafter; studio: StudioBriefer };
   shutdown(): Promise<void>;
 }
 
@@ -194,7 +195,7 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     missions,
     madre,
     sitePublisher,
-    content: { store: contentStore, media, video, drafter: createPieceDrafter(providers) },
+    content: { store: contentStore, media, video, drafter: createPieceDrafter(providers), studio: createStudioBriefer(providers) },
     async shutdown() {
       logger.info('draining job queue');
       await queue.stop(15_000);

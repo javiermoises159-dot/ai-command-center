@@ -23,7 +23,7 @@ const LINE_CHARS = 22;
 const MAX_LINES = 4;
 /** The video is made in the background, so this can be generous for a slow free server. */
 const TIMEOUT_MS = 600_000;
-const FPS = 24;
+const FPS = 10;
 
 export interface Caption {
   start: number;
@@ -139,22 +139,9 @@ export function createReelMaker(options: { ffmpeg?: string; ffprobe?: string } =
       if (probe.code !== 0 || !Number.isFinite(seconds) || seconds <= 0) throw new MediaError('No se pudo leer la duración de la voz. Genera la voz otra vez.');
       const duration = Math.min(seconds, MAX_SECONDS);
 
-      // Each caption block goes in its own file: no quoting or escaping to get wrong.
       const font = findFont();
       const captions = font === null ? [] : captionsFor(text, duration);
-      const drawtexts: string[] = [];
-      for (const [index, caption] of captions.entries()) {
-        const file = join(dir, `cap${index}.txt`);
-        await writeFile(file, caption.text, 'utf8');
-        drawtexts.push(
-          `drawtext=fontfile=${font}:textfile=${file}:fontsize=42:fontcolor=white:line_spacing=10:box=1:boxcolor=black@0.55:boxborderw=18:x=(w-text_w)/2:y=h*0.70:enable='between(t,${caption.start},${caption.end})'`,
-        );
-      }
 
-      // The expensive part (scale, crop, blur, overlay) is done ONCE on a single frame.
-      // Looping the raw picture through that filter chain redoes it for every frame,
-      // which a small free server cannot afford. The video then only encodes a still
-      // image plus the captions.
       const backdropPath = join(dir, 'frame.png');
       const compose = await run(
         ffmpeg,
@@ -168,17 +155,43 @@ export function createReelMaker(options: { ffmpeg?: string; ffprobe?: string } =
       );
       if (compose.code !== 0) throw new MediaError(`No se pudo preparar la imagen del vídeo: ${compose.stderr.trim().split('\n').slice(-2).join(' ').slice(0, 200)}.`);
 
-      const filters = ['format=yuv420p', ...drawtexts].join(',');
+      // One still picture per caption (drawn once, not per video frame), then joined
+      // with the concat demuxer: the encoder only ever sees a few repeating frames.
+      const frames: { file: string; seconds: number }[] = [];
+      for (const [index, caption] of captions.entries()) {
+        const textFile = join(dir, `cap${index}.txt`);
+        await writeFile(textFile, caption.text, 'utf8');
+        const framePath = join(dir, `cap${index}.png`);
+        const drawn = await run(
+          ffmpeg,
+          [
+            '-y', '-loglevel', 'error', '-i', backdropPath,
+            '-vf', `drawtext=fontfile=${font}:textfile=${textFile}:fontsize=42:fontcolor=white:line_spacing=10:box=1:boxcolor=black@0.55:boxborderw=18:x=(w-text_w)/2:y=h*0.70`,
+            '-frames:v', '1', framePath,
+          ],
+          TIMEOUT_MS,
+        );
+        if (drawn.code !== 0) throw new MediaError(`No se pudieron dibujar los subtítulos: ${drawn.stderr.trim().split('\n').slice(-2).join(' ').slice(0, 200)}.`);
+        frames.push({ file: framePath, seconds: Math.max(0.05, caption.end - caption.start) });
+      }
+      if (frames.length === 0) frames.push({ file: backdropPath, seconds: duration });
+      const listPath = join(dir, 'frames.txt');
+      const lines = frames.flatMap((f) => [`file '${f.file}'`, `duration ${f.seconds.toFixed(3)}`]);
+      // The concat demuxer ignores the last duration unless the last file is repeated.
+      lines.push(`file '${frames[frames.length - 1]!.file}'`);
+      await writeFile(listPath, lines.join('\n'), 'utf8');
+
       const result = await run(
         ffmpeg,
         [
           '-y', '-loglevel', 'error',
-          '-loop', '1', '-framerate', String(FPS), '-i', backdropPath,
+          '-f', 'concat', '-safe', '0', '-i', listPath,
           '-i', audioPath,
-          '-vf', filters,
+          '-vf', 'format=yuv420p',
+          '-r', String(FPS),
           '-map', '0:v', '-map', '1:a',
           '-t', duration.toFixed(2),
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-crf', '28', '-g', String(FPS * 2), '-threads', '1',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-crf', '30', '-g', String(FPS * 2), '-threads', '1',
           '-c:a', 'aac', '-b:a', '96k', '-ar', '44100',
           '-movflags', '+faststart',
           outPath,
