@@ -347,7 +347,9 @@ export class RulesPlanner implements Planner {
     if (agent.optionalTools.includes('memory.recall') || agent.requiredTools.includes('memory.recall')) {
       add('memory.recall', 'Recordar lo que ya se sabe sobre este usuario y este proyecto.', false, { query, limit: 5 });
     }
-    if (fresh && agent.optionalTools.includes('web.search')) add('web.search', 'Consultar fuentes actuales.', false, { query });
+    if ((fresh || capability.startsWith('research.')) && agent.optionalTools.includes('web.search')) {
+      add('web.search', 'Consultar fuentes actuales.', false, { query: query.slice(0, 300) });
+    }
     if (capability.startsWith('research.') && agent.optionalTools.includes('research.wikipedia')) {
       add('research.wikipedia', 'Contexto enciclopédico con fuente citable.', false, { title: query.slice(0, 150) });
     }

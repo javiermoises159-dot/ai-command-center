@@ -30,6 +30,20 @@ describe('wikipedia', () => {
     assert.match(seen, /^https:\/\/es\.wikipedia\.org\//);
   });
 
+  it('retries with keywords when a whole sentence finds nothing', async () => {
+    const queries: string[] = [];
+    const fetch: WebFetch = async (url) => {
+      const q = new URL(url).searchParams.get('gsrsearch') ?? '';
+      queries.push(q);
+      const body = queries.length === 1 ? { batchcomplete: true } : { query: { pages: [{ title: 'Turín', extract: 'Turín es una ciudad.', fullurl: 'https://es.wikipedia.org/wiki/Tur%C3%ADn' }] } };
+      return { ok: true, status: 200, json: async () => body, text: async () => '' };
+    };
+    const out = await wikipedia(fetch, 'Montar una agencia digital en Turín para optimizar fichas', 'es');
+    assert.equal(queries.length, 2);
+    assert.ok(queries[1]!.length < queries[0]!.length && /Turín/.test(queries[1]!));
+    assert.equal(out.title, 'Turín');
+  });
+
   it('fails plainly when nothing matches', async () => {
     await assert.rejects(wikipedia(reply(200, { batchcomplete: true }), 'zzzz', 'es'), WebToolError);
   });

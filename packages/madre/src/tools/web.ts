@@ -40,11 +40,21 @@ export interface WikipediaOutput {
   fetchedAt: string;
 }
 
-/** Best-matching article's introduction for a title or free-text query. */
-export async function wikipedia(fetch: WebFetch, title: string, lang: string, signal?: AbortSignal): Promise<WikipediaOutput> {
-  const language = LANG.test(lang) ? lang : 'es';
-  const q = clip(title, 200);
-  if (q === '') throw new WebToolError('Falta el título o la consulta.');
+const STOP = new Set(['para', 'con', 'una', 'uno', 'unos', 'unas', 'los', 'las', 'del', 'que', 'por', 'como', 'quiero', 'montar', 'lanzar', 'crear', 'identificar', 'definir', 'afecta', 'quién', 'sobre', 'este', 'esta', 'the', 'and', 'for', 'with']);
+
+/** The few words worth searching for when a whole sentence finds nothing. */
+export function keywords(text: string, max = 5): string {
+  const seen = new Set<string>();
+  for (const word of text.split(/[^\p{L}\p{N}]+/u)) {
+    const w = word.trim();
+    if (w.length < 4 || STOP.has(w.toLowerCase()) || /^\d+$/.test(w)) continue;
+    seen.add(w);
+    if (seen.size >= max) break;
+  }
+  return [...seen].join(' ');
+}
+
+async function wikipediaOnce(fetch: WebFetch, q: string, language: string, signal?: AbortSignal): Promise<WikipediaOutput | null> {
   const params = new URLSearchParams({
     action: 'query',
     format: 'json',
@@ -67,7 +77,7 @@ export async function wikipedia(fetch: WebFetch, title: string, lang: string, si
   const pages = record(record(await response.json())?.query)?.pages;
   const page = Array.isArray(pages) ? record(pages[0]) : null;
   const extract = typeof page?.extract === 'string' ? page.extract.trim() : '';
-  if (page === null || extract === '') throw new WebToolError(`Wikipedia (${language}) no tiene ningún artículo para «${q}».`);
+  if (page === null || extract === '') return null;
   return {
     title: typeof page.title === 'string' ? page.title : q,
     extract: clip(extract, MAX_EXTRACT_CHARS),
@@ -75,6 +85,21 @@ export async function wikipedia(fetch: WebFetch, title: string, lang: string, si
     lang: language,
     fetchedAt: new Date().toISOString(),
   };
+}
+
+/** Best-matching article's introduction for a title or free-text query. Retries once with just the keywords. */
+export async function wikipedia(fetch: WebFetch, title: string, lang: string, signal?: AbortSignal): Promise<WikipediaOutput> {
+  const language = LANG.test(lang) ? lang : 'es';
+  const q = clip(title, 200);
+  if (q === '') throw new WebToolError('Falta el título o la consulta.');
+  const first = await wikipediaOnce(fetch, q, language, signal);
+  if (first !== null) return first;
+  const short = keywords(q);
+  if (short !== '' && short !== q) {
+    const second = await wikipediaOnce(fetch, short, language, signal);
+    if (second !== null) return second;
+  }
+  throw new WebToolError(`Wikipedia (${language}) no tiene ningún artículo para «${q}».`);
 }
 
 export interface SearchResult {
