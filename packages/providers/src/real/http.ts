@@ -169,10 +169,17 @@ export function failureFromResponse(
       detail: `${ctx.label} no está disponible ahora mismo (HTTP ${status}).`,
     });
   }
-  if (status === 404 && ctx.model !== null) {
-    return new ProviderError('PROVIDER_BAD_REQUEST', {
+  // 404 / 410 with a model set: the model id is unknown or has been retired (hosts
+  // retire free models). Retrying or failing the step would not help — this provider
+  // is misconfigured, so the engine moves on to another one and the message tells the
+  // operator which variable to fix.
+  if ((status === 404 || status === 410) && ctx.model !== null) {
+    return new ProviderError('PROVIDER_UNCONFIGURED', {
       ...base,
-      detail: `${ctx.label} no reconoce el modelo «${ctx.model}» (HTTP 404). Revisa ${ctx.modelVariable}.`,
+      detail:
+        status === 410
+          ? `${ctx.label} ya no ofrece el modelo «${ctx.model}» (HTTP 410, retirado). Cambia ${ctx.modelVariable} por un modelo vigente.`
+          : `${ctx.label} no reconoce el modelo «${ctx.model}» (HTTP 404). Revisa ${ctx.modelVariable}.`,
     });
   }
   return new ProviderError('PROVIDER_BAD_REQUEST', {
