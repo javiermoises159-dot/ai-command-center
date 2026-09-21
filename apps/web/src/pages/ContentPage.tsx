@@ -23,7 +23,8 @@ import {
   type VoiceLang,
 } from '../lib/content.ts';
 
-const FIELD = 'min-h-[44px] w-full rounded-xl border border-[var(--color-edge-bright)] bg-transparent px-3 text-base text-[var(--color-ink)]';
+// min-w-0 + appearance-none: iOS Safari gives date inputs an intrinsic width that overflows the card.
+const FIELD = 'block min-h-[44px] w-full min-w-0 max-w-full appearance-none rounded-xl border border-[var(--color-edge-bright)] bg-transparent px-3 text-base text-[var(--color-ink)]';
 const LABEL = 'mb-1 block text-[0.8rem] font-semibold text-[var(--color-ink)]';
 
 const BUCKETS: { key: Bucket; title: string; empty: string }[] = [
