@@ -158,13 +158,13 @@ describe('ProviderRegistry', () => {
     const described = registry.describe();
     assert.deepEqual(
       described.map((d) => d.id).sort(),
-      ['anthropic', 'cerebras', 'cloudflare', 'gemini', 'mistral', 'mock', 'ollama', 'openai', 'openai-compatible'],
+      ['anthropic', 'cerebras', 'cloudflare', 'gemini', 'mistral', 'mock', 'nvidia', 'ollama', 'openai', 'openai-compatible'],
     );
     assert.equal(described.filter((d) => d.availability === 'available').length, 1);
     // Ollama (no server) is planned; the real vendors and the OpenAI-compatible
     // adapter are implemented but unconfigured — a different state.
     assert.equal(described.filter((d) => d.availability === 'planned').length, 1);
-    assert.equal(described.filter((d) => d.availability === 'unconfigured').length, 7);
+    assert.equal(described.filter((d) => d.availability === 'unconfigured').length, 8);
   });
 
   it('resolves the default provider and its first model', () => {

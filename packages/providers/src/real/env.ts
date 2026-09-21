@@ -11,6 +11,7 @@
  *   Gemini      GOOGLE_API_KEY      GEMINI_MODEL      GEMINI_API_BASE_URL
  *   Cerebras    CEREBRAS_API_KEY    CEREBRAS_MODEL
  *   Mistral     MISTRAL_API_KEY     MISTRAL_MODEL
+ *   NVIDIA NIM  NVIDIA_API_KEY  NVIDIA_MODEL
  *   Cloudflare  CLOUDFLARE_API_TOKEN  CLOUDFLARE_ACCOUNT_ID  CLOUDFLARE_MODEL
  *               (GEMINI_API_KEY is accepted as an alias: it is the name earlier
  *                versions of `.env.example` used)
@@ -32,6 +33,7 @@ export interface RealProviderEnv {
   cerebras: HostedCompatOptions;
   mistral: HostedCompatOptions;
   cloudflare: HostedCompatOptions;
+  nvidia: HostedCompatOptions;
 }
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -79,6 +81,7 @@ export function realProviderOptionsFromEnv(env: Env): RealProviderEnv {
     },
     cerebras: { apiKey: value(env, 'CEREBRAS_API_KEY'), models: list(env, 'CEREBRAS_MODEL'), baseUrl: value(env, 'CEREBRAS_API_BASE_URL') },
     mistral: { apiKey: value(env, 'MISTRAL_API_KEY'), models: list(env, 'MISTRAL_MODEL'), baseUrl: value(env, 'MISTRAL_API_BASE_URL') },
+    nvidia: { apiKey: value(env, 'NVIDIA_API_KEY'), models: list(env, 'NVIDIA_MODEL'), baseUrl: value(env, 'NVIDIA_API_BASE_URL') },
     cloudflare: {
       apiKey: value(env, 'CLOUDFLARE_API_TOKEN'),
       models: list(env, 'CLOUDFLARE_MODEL'),

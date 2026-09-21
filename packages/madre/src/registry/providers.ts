@@ -116,6 +116,15 @@ const META: Record<string, ProviderMeta> = {
     notConnected: 'Sin configurar: faltan CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID y CLOUDFLARE_MODEL. No se sustituye por una simulación.',
     connected: 'Configurado (cuota diaria gratuita de Cloudflare). Las llamadas salen del servidor; la clave nunca llega al navegador.',
   },
+  nvidia: {
+    label: 'NVIDIA NIM',
+    tier: 'external',
+    privacy: 'third_party',
+    requires: 'NVIDIA_API_KEY y NVIDIA_MODEL',
+    whenAvailable: 'CONNECTED',
+    notConnected: 'Sin configurar: faltan NVIDIA_API_KEY y NVIDIA_MODEL. No se sustituye por una simulación.',
+    connected: 'Configurado (plan gratuito de NVIDIA). Las llamadas salen del servidor; la clave nunca llega al navegador.',
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -172,6 +181,7 @@ const CAPABILITIES: Record<string, ModelCapabilities> = {
   'openai-compatible': { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
   cerebras: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
   mistral: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
+  nvidia: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
   cloudflare: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
 };
 

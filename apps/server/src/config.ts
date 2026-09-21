@@ -158,7 +158,7 @@ function prices(env: NodeJS.ProcessEnv): ServerConfig['madre']['prices'] {
   // free key does not need a price entry to be usable. A paid plan must be
   // declared in MADRE_PRICES_JSON.
   const zero = { inputPer1kUsd: 0, outputPer1kUsd: 0 };
-  const defaults: ServerConfig['madre']['prices'] = { cerebras: zero, mistral: zero, cloudflare: zero };
+  const defaults: ServerConfig['madre']['prices'] = { cerebras: zero, mistral: zero, cloudflare: zero, nvidia: zero };
   const raw = str(env, 'MADRE_PRICES_JSON');
   if (raw === undefined) return defaults;
   let parsed: unknown;
@@ -211,7 +211,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   }
 
   const accessPassword = str(env, 'APP_PASSWORD');
-  const hasRealKey = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'OPENAI_COMPAT_API_KEY', 'CEREBRAS_API_KEY', 'MISTRAL_API_KEY', 'CLOUDFLARE_API_TOKEN', 'TAVILY_API_KEY', 'GITHUB_TOKEN'].some(
+  const hasRealKey = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'OPENAI_COMPAT_API_KEY', 'CEREBRAS_API_KEY', 'MISTRAL_API_KEY', 'CLOUDFLARE_API_TOKEN', 'NVIDIA_API_KEY', 'TAVILY_API_KEY', 'GITHUB_TOKEN'].some(
     (name) => str(env, name) !== undefined,
   );
   if (env.NODE_ENV === 'production' && hasRealKey && accessPassword === undefined && !bool(env, 'ALLOW_OPEN_ACCESS', false)) {

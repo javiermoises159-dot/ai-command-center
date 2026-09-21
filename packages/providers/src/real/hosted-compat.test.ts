@@ -53,3 +53,16 @@ describe('hosted free-tier providers', () => {
     await assert.rejects(c.execute(task('m')), (e: Error) => !JSON.stringify(e).includes('sk-secret-123') && !e.message.includes('sk-secret-123'));
   });
 });
+
+import { createNvidia } from './hosted-compat.ts';
+
+describe('NVIDIA NIM', () => {
+  it('uses its own host and id', async () => {
+    const seen: { url?: string; auth?: string } = {};
+    const n = createNvidia({ apiKey: 'nk', models: ['meta/llama-3.3-70b-instruct'], fetch: ok(seen) });
+    assert.equal(n.id, 'nvidia');
+    await n.execute(task('meta/llama-3.3-70b-instruct'));
+    assert.equal(seen.url, 'https://integrate.api.nvidia.com/v1/chat/completions');
+    assert.match(createNvidia({}).configuration().reason ?? '', /NVIDIA_API_KEY/);
+  });
+});

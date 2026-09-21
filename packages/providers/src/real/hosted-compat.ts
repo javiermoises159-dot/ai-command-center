@@ -5,6 +5,7 @@
  *
  *   Cerebras    CEREBRAS_API_KEY        CEREBRAS_MODEL
  *   Mistral     MISTRAL_API_KEY         MISTRAL_MODEL
+ *   NVIDIA NIM  NVIDIA_API_KEY          NVIDIA_MODEL
  *   Cloudflare  CLOUDFLARE_API_TOKEN    CLOUDFLARE_MODEL    CLOUDFLARE_ACCOUNT_ID
  *
  * Base URLs are the vendors' documented ones and are built in — unlike the
@@ -43,6 +44,15 @@ export const MISTRAL_PRESET: HostPreset = {
   baseUrl: 'https://api.mistral.ai/v1',
 };
 
+export const NVIDIA_PRESET: HostPreset = {
+  id: 'nvidia',
+  label: 'NVIDIA NIM',
+  keyVariable: 'NVIDIA_API_KEY',
+  modelVariable: 'NVIDIA_MODEL',
+  baseUrlVariable: 'NVIDIA_API_BASE_URL',
+  baseUrl: 'https://integrate.api.nvidia.com/v1',
+};
+
 /** Cloudflare's URL contains the account id, so it is built from CLOUDFLARE_ACCOUNT_ID. */
 export const CLOUDFLARE_PRESET: HostPreset = {
   id: 'cloudflare',
@@ -79,3 +89,4 @@ export class HostedCompatProvider extends OpenAICompatibleProvider {
 export const createCerebras = (o?: HostedCompatOptions): HostedCompatProvider => new HostedCompatProvider(CEREBRAS_PRESET, o);
 export const createMistral = (o?: HostedCompatOptions): HostedCompatProvider => new HostedCompatProvider(MISTRAL_PRESET, o);
 export const createCloudflare = (o?: HostedCompatOptions): HostedCompatProvider => new HostedCompatProvider(CLOUDFLARE_PRESET, o);
+export const createNvidia = (o?: HostedCompatOptions): HostedCompatProvider => new HostedCompatProvider(NVIDIA_PRESET, o);

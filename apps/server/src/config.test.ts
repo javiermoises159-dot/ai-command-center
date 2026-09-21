@@ -62,7 +62,7 @@ describe('loadConfig', () => {
     assert.equal(config.ollamaBaseUrl, undefined);
     assert.equal(config.madre.budget.perMissionUsd, null);
     // Only the free-tier hosts are pre-priced (0 USD); nothing else is assumed.
-    assert.deepEqual(Object.keys(config.madre.prices).sort(), ['cerebras', 'cloudflare', 'mistral']);
+    assert.deepEqual(Object.keys(config.madre.prices).sort(), ['cerebras', 'cloudflare', 'mistral', 'nvidia']);
   });
 
   it('reads MADRE settings and validates them', () => {

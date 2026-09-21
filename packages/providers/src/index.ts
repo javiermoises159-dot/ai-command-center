@@ -1,5 +1,5 @@
 import { MockProvider, type MockProviderOptions } from './mock/mock-provider.ts';
-import { createCerebras, createCloudflare, createMistral, type HostedCompatOptions } from './real/hosted-compat.ts';
+import { createCerebras, createCloudflare, createMistral, createNvidia, type HostedCompatOptions } from './real/hosted-compat.ts';
 import { OpenAICompatibleProvider, type OpenAICompatibleOptions } from './real/openai-compatible.ts';
 import { AnthropicProvider } from './real/anthropic.ts';
 import { GeminiProvider } from './real/gemini.ts';
@@ -18,7 +18,7 @@ export { GeminiProvider } from './real/gemini.ts';
 export { RealProvider, TEXT_ONLY, type RealProviderOptions } from './real/real-provider.ts';
 export { realProviderOptionsFromEnv, type RealProviderEnv } from './real/env.ts';
 export { scrub, type HttpFetch } from './real/http.ts';
-export { HostedCompatProvider, createCerebras, createCloudflare, createMistral, type HostedCompatOptions } from './real/hosted-compat.ts';
+export { HostedCompatProvider, createCerebras, createCloudflare, createMistral, createNvidia, type HostedCompatOptions } from './real/hosted-compat.ts';
 export { OpenAICompatibleProvider, type OpenAICompatibleOptions } from './real/openai-compatible.ts';
 export { OllamaProvider, discoverOllamaModels, type FetchLike, type OllamaOptions } from './local/ollama.ts';
 
@@ -33,6 +33,7 @@ export interface ProviderRegistryOptions {
   cerebras?: HostedCompatOptions;
   mistral?: HostedCompatOptions;
   cloudflare?: HostedCompatOptions;
+  nvidia?: HostedCompatOptions;
 }
 
 /**
@@ -66,5 +67,6 @@ export function createProviderRegistry(options: ProviderRegistryOptions = {}): P
     .register(compat)
     .register(createCerebras(options.cerebras))
     .register(createMistral(options.mistral))
+    .register(createNvidia(options.nvidia))
     .register(createCloudflare(options.cloudflare));
 }

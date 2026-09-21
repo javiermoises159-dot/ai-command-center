@@ -74,11 +74,12 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     cerebras: config.realProviders.cerebras,
     mistral: config.realProviders.mistral,
     cloudflare: config.realProviders.cloudflare,
+    nvidia: config.realProviders.nvidia,
   });
   // Say what is configured — the names only, never a key. A missing key is a
   // normal state, not an error: the provider is simply reported as unconfigured.
   for (const descriptor of providers.describe()) {
-    if (descriptor.id === 'openai' || descriptor.id === 'anthropic' || descriptor.id === 'gemini' || descriptor.id === 'openai-compatible' || descriptor.id === 'cerebras' || descriptor.id === 'mistral' || descriptor.id === 'cloudflare') {
+    if (descriptor.id === 'openai' || descriptor.id === 'anthropic' || descriptor.id === 'gemini' || descriptor.id === 'openai-compatible' || descriptor.id === 'cerebras' || descriptor.id === 'mistral' || descriptor.id === 'cloudflare' || descriptor.id === 'nvidia') {
       if (descriptor.configured === true) logger.info('real provider configured', { provider: descriptor.id, models: descriptor.models.map((m) => m.id) });
       else logger.info('real provider not configured', { provider: descriptor.id, requires: descriptor.requires });
     }
