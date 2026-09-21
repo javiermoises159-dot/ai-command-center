@@ -7,6 +7,10 @@
  * boot a server. Swapping Express out means rewriting this file and nothing else.
  */
 
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import { buildOpenApiDocument } from '@acc/contracts';
 
@@ -31,6 +35,7 @@ export function createExpressApp(container: Container): Express {
   app.use(express.json({ limit: MAX_BODY_BYTES }));
   app.use(cors(container.config.corsOrigins));
   app.use(rateLimit(container.config.rateLimit));
+  if (container.config.accessPassword !== undefined) app.use(requirePassword(container.config.accessPassword));
 
   // Malformed JSON arrives here as a SyntaxError from express.json. Without
   // this it would surface as an opaque 500.
@@ -78,6 +83,17 @@ export function createExpressApp(container: Container): Express {
       });
     }
   });
+
+  // Production: the same process serves the built web app, so the browser stays
+  // same-origin (no CORS) and the site sits behind the same password as the API.
+  const webDir = resolve(container.config.webDistDir ?? join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'web', 'dist'));
+  if (existsSync(join(webDir, 'index.html'))) {
+    app.use(express.static(webDir, { index: false, maxAge: '1h' }));
+    app.get(/^\/(?!api\/).*/, (_req: Request, res: Response) => {
+      res.setHeader('Cache-Control', 'no-cache');
+      res.sendFile(join(webDir, 'index.html'));
+    });
+  }
 
   app.use((req: Request, res: Response) => {
     res.status(404).json({
@@ -136,6 +152,33 @@ function rateLimit(options: { max: number; windowMs: number }) {
         issues: [],
       },
     });
+  };
+}
+
+/**
+ * Shared-password gate (HTTP Basic; the username is ignored). Safari and every
+ * other browser remember the credentials and resend them on same-origin fetches,
+ * so the app needs no login screen. `/api/health` stays open so a host can probe
+ * it; it reports no data. Compared as SHA-256 digests in constant time.
+ */
+export function requirePassword(password: string) {
+  const expected = createHash('sha256').update(password).digest();
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (req.path === '/api/health' || req.method === 'OPTIONS') {
+      next();
+      return;
+    }
+    const header = req.headers.authorization ?? '';
+    if (header.startsWith('Basic ')) {
+      const decoded = Buffer.from(header.slice(6), 'base64').toString('utf8');
+      const given = createHash('sha256').update(decoded.slice(decoded.indexOf(':') + 1)).digest();
+      if (timingSafeEqual(given, expected)) {
+        next();
+        return;
+      }
+    }
+    res.setHeader('WWW-Authenticate', 'Basic realm="AI Command Center", charset="UTF-8"');
+    res.status(401).json({ error: { code: 'unauthorized', message: 'Se necesita la contraseña de acceso.', issues: [] } });
   };
 }
 

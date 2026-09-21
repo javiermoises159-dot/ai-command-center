@@ -42,6 +42,15 @@ export interface ServerConfig {
   realProviders: RealProviderEnv;
   /** Provider ids the operator switched off with MADRE_DISABLED_PROVIDERS. */
   disabledProviders: string[];
+  /**
+   * Shared password for the whole site (HTTP Basic, any username). Unset means
+   * open access, which is only acceptable on a trusted network: the app has no
+   * user accounts, so this is the only thing standing between the internet and
+   * whatever the configured providers cost.
+   */
+  accessPassword: string | undefined;
+  /** Folder with the built web app. Unset = apps/web/dist next to the server. */
+  webDistDir: string | undefined;
   /** A guard rail against runaway clients, not a security control. */
   rateLimit: {
     max: number;
@@ -187,8 +196,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     throw new Error(`MADRE_BUDGET_ON_EXCEED must be block, fallback_local or ask, got "${onExceedRaw}".`);
   }
 
+  const accessPassword = str(env, 'APP_PASSWORD');
+  const hasRealKey = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'].some(
+    (name) => str(env, name) !== undefined,
+  );
+  if (env.NODE_ENV === 'production' && hasRealKey && accessPassword === undefined && !bool(env, 'ALLOW_OPEN_ACCESS', false)) {
+    throw new Error(
+      'Hay claves de proveedores reales pero no APP_PASSWORD: cualquiera con la URL gastaría tu crédito. ' +
+        'Define APP_PASSWORD (o ALLOW_OPEN_ACCESS=true si asumes el riesgo en una red de confianza).',
+    );
+  }
+
   return {
     port: int(env, 'PORT', 3001),
+    accessPassword,
+    webDistDir: str(env, 'WEB_DIST_DIR'),
     corsOrigins: (str(env, 'CORS_ORIGIN') ?? 'http://localhost:5173')
       .split(',')
       .map((o) => o.trim())

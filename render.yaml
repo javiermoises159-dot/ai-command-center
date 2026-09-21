@@ -1,0 +1,38 @@
+# Render Blueprint: one free web service. The database is external (Neon, free).
+# Secrets are marked sync:false: Render asks you for them in its dashboard, so
+# they never live in this repository.
+services:
+  - type: web
+    name: ai-command-center
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PERSISTENCE
+        value: postgres
+      - key: DB_SSL
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      # Spending caps (USD). MADRE blocks a mission that would exceed them.
+      - key: MADRE_BUDGET_PER_MISSION_USD
+        value: "0.50"
+      - key: MADRE_BUDGET_DAILY_USD
+        value: "2"
+      # Fill in the provider(s) you want; leave the others empty.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
