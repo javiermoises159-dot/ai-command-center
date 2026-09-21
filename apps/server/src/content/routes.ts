@@ -13,6 +13,8 @@ import type { ReelMaker } from './video.ts';
 import { PLATFORMS, STATUSES, type Media, type ContentInput, type ContentPatch, type ContentStore, type MediaKind, type Platform, type ContentStatus } from './store.ts';
 
 export interface ContentDeps {
+  /** Test hook: pause between image retries. */
+  imagePause?: (ms: number) => Promise<void>;
   store: ContentStore;
   /** Absent when Cloudflare is not configured: the calendar still works, media does not. */
   media: MediaGenerator | undefined;
@@ -235,6 +237,8 @@ export function contentRoutes(deps: ContentDeps): Route[] {
       const dates = spreadDates(written.length, days);
       const itemIds: string[] = [];
       const notes: string[] = [];
+      const pending: { id: string; title: string; prompt: string; reason: string }[] = [];
+      const wait = deps.imagePause ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
       for (const [index, piece] of written.entries()) {
         const created = await deps.store.create({ ...piece, scheduledAt: dates[index] ?? null });
         itemIds.push(created.id);
@@ -242,8 +246,20 @@ export function contentRoutes(deps: ContentDeps): Route[] {
           try {
             await deps.store.setMedia(created.id, 'image', await deps.media.image(piece.imagePrompt));
           } catch (error) {
-            notes.push(`«${piece.title}»: sin imagen (${error instanceof Error ? error.message : 'error'})`);
+            pending.push({ id: created.id, title: piece.title, prompt: piece.imagePrompt, reason: error instanceof Error ? error.message : 'error' });
           }
+        }
+      }
+      // Free image services throttle bursts: give them a breather and try the missing ones once more.
+      if (pending.length > 0 && deps.media?.image != null) {
+        await wait(25_000);
+        for (const item of pending) {
+          try {
+            await deps.store.setMedia(item.id, 'image', await deps.media.image(item.prompt));
+          } catch (error) {
+            notes.push(`«${item.title}»: sin imagen (${error instanceof Error ? error.message : item.reason}). Puedes crearla luego con «Imagen» en Contenidos.`);
+          }
+          await wait(3_000);
         }
       }
       return { itemIds, notes };

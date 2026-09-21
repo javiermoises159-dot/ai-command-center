@@ -205,6 +205,8 @@ export function pcmToWavBase64(pcmBase64: string, sampleRate = 24_000): string {
 export interface ImageStep {
   name: string;
   run(prompt: string): Promise<Media>;
+  /** How long to leave this service alone after it reports 429. Default 30 min (a daily quota); a per-minute rate limit needs seconds. */
+  cooldownMs?: number;
 }
 
 const MIN_30 = 30 * 60_000;
@@ -217,23 +219,26 @@ const MIN_30 = 30 * 60_000;
 export function chainImages(steps: readonly ImageStep[], options: { cooldownMs?: number; now?: () => number } = {}): (prompt: string) => Promise<Media> {
   const cooldown = options.cooldownMs ?? MIN_30;
   const now = options.now ?? Date.now;
-  const resting = new Map<string, number>();
+  const resting = new Map<string, { until: number; why: string }>();
   return async (prompt) => {
     const problems: string[] = [];
     let quotaOnly = true;
     for (const step of steps) {
-      const until = resting.get(step.name) ?? 0;
-      if (until > now()) {
-        problems.push(`${step.name}: sin cupo por ahora`);
+      const rest = resting.get(step.name);
+      if (rest !== undefined && rest.until > now()) {
+        // Keep the real reason and say when it will be tried again, not just "sin cupo".
+        const mins = Math.max(1, Math.ceil((rest.until - now()) / 60_000));
+        problems.push(`${step.name}: ${rest.why} (se vuelve a probar en ${rest.until - now() < 90_000 ? `${Math.ceil((rest.until - now()) / 1000)} s` : `${mins} min`})`);
         continue;
       }
       try {
         return await step.run(prompt);
       } catch (error) {
         const status = error instanceof MediaError ? error.status : 502;
-        if (status === 429) resting.set(step.name, now() + cooldown);
+        const why = error instanceof Error ? error.message : 'error';
+        if (status === 429) resting.set(step.name, { until: now() + (step.cooldownMs ?? cooldown), why });
         else quotaOnly = false;
-        problems.push(`${step.name}: ${error instanceof Error ? error.message : 'error'}`);
+        problems.push(`${step.name}: ${why}`);
       }
     }
     throw new MediaError(`No se pudo crear la imagen. ${problems.join(' · ')}`, quotaOnly ? 429 : 502);
@@ -278,9 +283,27 @@ export class GeminiImage {
 
 /** Pollinations: free FLUX pictures over plain HTTP, no key. Best-effort by nature. */
 export class PollinationsImage {
-  constructor(private readonly fetchImpl: PlainFetch = fetch) {}
+  constructor(
+    private readonly fetchImpl: PlainFetch = fetch,
+    private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+  ) {}
 
+  /** Anonymous use allows one request at a time and answers 429 to the rest: wait a little and ask again before giving up. */
   async image(prompt: string): Promise<Media> {
+    let last: MediaError = new MediaError('no respondió');
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (attempt > 0) await this.sleep(4_000 * attempt);
+      try {
+        return await this.once(prompt);
+      } catch (error) {
+        last = error instanceof MediaError ? error : new MediaError('error');
+        if (last.status !== 429 && !/error 5\d\d/.test(last.message)) throw last;
+      }
+    }
+    throw last;
+  }
+
+  private async once(prompt: string): Promise<Media> {
     const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.slice(0, 1500))}?width=1024&height=1024&nologo=true&model=flux&seed=${Math.floor(Math.random() * 1_000_000)}`;
     let response: Response;
     try {
@@ -288,7 +311,7 @@ export class PollinationsImage {
     } catch (error) {
       throw new MediaError(`no se pudo conectar (${error instanceof Error ? error.message : 'red'})`);
     }
-    if (response.status === 429) throw new MediaError('demasiadas peticiones', 429);
+    if (response.status === 429) throw new MediaError('demasiadas peticiones a la vez', 429);
     const type = response.headers.get('content-type') ?? '';
     if (!response.ok || !type.startsWith('image/')) throw new MediaError(`respondió con error ${response.status}`);
     const bytes = Buffer.from(await response.arrayBuffer());

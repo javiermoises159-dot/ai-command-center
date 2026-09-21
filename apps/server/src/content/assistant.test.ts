@@ -52,11 +52,11 @@ describe('spreadDates and runAssistant', () => {
 });
 
 describe('assistant and publish routes', () => {
-  function api(planner: AssistantPlanner | undefined, publishers: Publisher[] = []) {
+  function api(planner: AssistantPlanner | undefined, publishers: Publisher[] = [], image: () => Promise<{ mime: string; base64: string }> = async () => ({ mime: 'image/png', base64: 'aW1n' })) {
     const store = new MemoryContentStore();
-    const media = { image: async () => ({ mime: 'image/png', base64: 'aW1n' }), voice: null };
+    const media = { image, voice: null };
     const drafter = async () => [{ title: 'Uno', caption: 'a', imagePrompt: 'p1' }, { title: 'Dos', caption: 'b', imagePrompt: 'p2' }, { title: 'Tres', caption: 'c' }];
-    const router = createRouter({ missions: {} as MissionService, providers: new ProviderRegistry(), logger: silentLogger, version: 't', content: { store, media, drafter, assistant: planner, publishers } });
+    const router = createRouter({ missions: {} as MissionService, providers: new ProviderRegistry(), logger: silentLogger, version: 't', content: { store, media, drafter, assistant: planner, publishers, imagePause: async () => undefined } });
     return {
       store,
       call: async (method: 'GET' | 'POST', path: string, body?: unknown) => {
@@ -79,6 +79,19 @@ describe('assistant and publish routes', () => {
     assert.deepEqual(done.body.items.map((i: any) => i.hasImage), [true, true, false]);
     const all = await store.list();
     assert.ok(all.every((i) => i.status === 'scheduled' && i.scheduledAt !== null));
+  });
+
+  it('retries missing pictures once after a pause and notes only the ones that still fail', async () => {
+    let calls = 0;
+    const { call } = api(async () => ({ reply: 'ok', actions: [{ type: 'campaign', topic: 't', pieces: 3, days: 5 }] }), [], async () => {
+      calls += 1;
+      if (calls <= 2 || calls === 4) throw new Error('ocupado');
+      return { mime: 'image/png', base64: 'aW1n' };
+    });
+    const started = await call('POST', '/api/assistant', { request: 'campaña' });
+    await wait();
+    const done = await call('GET', `/api/assistant/${started.body.id}`);
+    assert.deepEqual(done.body.items.map((i: any) => i.hasImage), [true, false, false]);
   });
 
   it('answers 409 without a real AI, 404 for an unknown job and reports a planner failure', async () => {

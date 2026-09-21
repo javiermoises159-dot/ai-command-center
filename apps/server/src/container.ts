@@ -206,7 +206,7 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
   const extraImages: ImageStep[] = [
     ...(config.geminiApiKey !== undefined ? [{ name: 'Gemini', run: (p: string) => new GeminiImage(config.geminiApiKey!, config.geminiImageModel).image(p) }] : []),
     ...(config.huggingFaceToken !== undefined ? [{ name: 'Hugging Face', run: (p: string) => new HuggingFaceImage(config.huggingFaceToken!).image(p) }] : []),
-    ...(config.freeImageFallback ? [{ name: 'Pollinations', run: (p: string) => new PollinationsImage().image(p) }] : []),
+    ...(config.freeImageFallback ? [{ name: 'Pollinations', run: (p: string) => new PollinationsImage().image(p), cooldownMs: 20_000 }] : []),
   ];
   const media = buildMedia({ cloudflare, gemini, extraImages });
   const transcribe = chainTranscribers([

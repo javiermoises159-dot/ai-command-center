@@ -38,6 +38,42 @@ describe('chainImages', () => {
   });
 });
 
+describe('chainImages reasons and short cooldowns', () => {
+  it('keeps the real reason of a resting service and lets a per-minute limit come back quickly', async () => {
+    let clock = 0;
+    let calls = 0;
+    const chain = chainImages(
+      [{ name: 'Rapido', cooldownMs: 20_000, run: async () => { calls += 1; throw new MediaError('demasiadas peticiones a la vez', 429); } }, { name: 'Diario', run: async () => { throw new MediaError('cupo diario', 429); } }],
+      { now: () => clock },
+    );
+    await assert.rejects(chain('x'), /Rapido: demasiadas peticiones a la vez · Diario: cupo diario/);
+    await assert.rejects(chain('x'), /Rapido: demasiadas peticiones a la vez \(se vuelve a probar en \d+ s\) · Diario: cupo diario \(se vuelve a probar en 30 min\)/);
+    assert.equal(calls, 1);
+    clock = 21_000;
+    await assert.rejects(chain('x'));
+    assert.equal(calls, 2);
+  });
+});
+
+describe('Pollinations retries', () => {
+  it('waits and asks again when it is busy (429) and gives up after three tries', async () => {
+    let n = 0;
+    const waits: number[] = [];
+    const flaky = (async () => { n += 1; return n < 3 ? new Response('', { status: 429 }) : new Response(Buffer.alloc(2000, 1), { status: 200, headers: { 'content-type': 'image/jpeg' } }); }) as unknown as typeof fetch;
+    const ok = await new PollinationsImage(flaky, async (ms) => { waits.push(ms); }).image('x');
+    assert.equal(ok.mime, 'image/jpeg');
+    assert.deepEqual(waits, [4000, 8000]);
+    let m = 0;
+    const always = (async () => { m += 1; return new Response('', { status: 429 }); }) as unknown as typeof fetch;
+    await assert.rejects(new PollinationsImage(always, async () => undefined).image('x'), (e: MediaError) => e.status === 429);
+    assert.equal(m, 3);
+    let bad = 0;
+    const notFound = (async () => { bad += 1; return new Response('', { status: 404 }); }) as unknown as typeof fetch;
+    await assert.rejects(new PollinationsImage(notFound, async () => undefined).image('x'));
+    assert.equal(bad, 1);
+  });
+});
+
 describe('buildMedia backups', () => {
   it('falls back to the extra pictures when Cloudflare is out of quota, and works with no Cloudflare at all', async () => {
     const cloudflare = { image: async () => { throw new MediaError('cupo', 429); }, voice: async () => png } as never;
