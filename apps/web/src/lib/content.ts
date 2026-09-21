@@ -84,7 +84,26 @@ export const generateImage = async (id: string, prompt: string) =>
   (await call<{ item: ContentItem }>('POST', `/api/content/${encodeURIComponent(id)}/image`, { prompt })).item;
 export const generateVoice = async (id: string, text: string, lang: VoiceLang) =>
   (await call<{ item: ContentItem }>('POST', `/api/content/${encodeURIComponent(id)}/voice`, { text, lang })).item;
-export const generateVideo = async (id: string) => (await call<{ item: ContentItem }>('POST', `/api/content/${encodeURIComponent(id)}/video`)).item;
+export const startVideo = async (id: string) => void (await call('POST', `/api/content/${encodeURIComponent(id)}/video`));
+export const videoStatus = (id: string) => call<{ state: 'idle' | 'running' | 'failed'; message: string | null; item: ContentItem }>('GET', `/api/content/${encodeURIComponent(id)}/video`);
+
+/**
+ * Ask for the video and wait for it. The server makes it in the background (a
+ * small free server can take a minute or more), so this polls until it is done.
+ */
+export async function makeVideo(id: string, alive: () => boolean = () => true, pollMs = 3_000, maxMs = 10 * 60_000): Promise<ContentItem> {
+  await startVideo(id);
+  const deadline = Date.now() + maxMs;
+  while (alive() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    const status = await videoStatus(id);
+    if (status.state === 'running') continue;
+    if (status.state === 'failed') throw new Error(status.message ?? 'No se pudo crear el vídeo.');
+    if (status.item.hasVideo) return status.item;
+    throw new Error('El vídeo no llegó a crearse (el servidor se reinició). Inténtalo otra vez.');
+  }
+  throw new Error(alive() ? 'El vídeo tarda demasiado. Vuelve a esta pantalla en unos minutos.' : 'Cancelado.');
+}
 export const getMedia = (id: string, kind: 'image' | 'audio' | 'video') => call<{ mime: string; base64: string }>('GET', `/api/content/${encodeURIComponent(id)}/media/${kind}`);
 
 /** Which list an item belongs in. A scheduled item whose time has come is "due". */

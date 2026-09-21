@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Badge, Button, EmptyState, ErrorBanner, ListSkeleton, Notice, PageHeader, Panel, SectionTitle } from '../components/primitives.tsx';
 import {
@@ -8,7 +8,7 @@ import {
   createContent,
   deleteContent,
   generateImage,
-  generateVideo,
+  makeVideo,
   generateVoice,
   getMedia,
   groupContent,
@@ -179,6 +179,8 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [imageData, setImageData] = useState<{ base64: string; mime: string } | null>(null);
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoData, setVideoData] = useState<{ base64: string; mime: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -326,7 +328,7 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
             <p className="text-[0.75rem] text-[var(--color-ink-faint)]">Junta la imagen, la voz y el texto como subtítulos (9:16). Necesita tener ya la imagen y la voz. Si cambias alguna, vuelve a crearlo.</p>
             {videoUrl !== null && <video controls playsInline src={videoUrl} className="max-h-[28rem] w-full rounded-xl bg-black" />}
             <div className="flex flex-wrap gap-2">
-              <Button variant="ghost" disabled={media?.video !== true || !item.hasImage || !item.hasAudio} busy={busy === 'video'} onClick={() => void run('video', () => generateVideo(item.id))}>
+              <Button variant="ghost" disabled={media?.video !== true || !item.hasImage || !item.hasAudio} busy={busy === 'video'} onClick={() => void run('video', () => makeVideo(item.id, () => alive.current))}>
                 {item.hasVideo ? 'Crear el vídeo otra vez' : 'Crear vídeo'}
               </Button>
               {videoUrl !== null && (
@@ -336,7 +338,7 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
               )}
             </div>
             {media !== null && !media.video && <p className="text-[0.75rem] text-[var(--color-ink-faint)]">Este servidor todavía no tiene ffmpeg instalado.</p>}
-            {busy === 'video' && <p className="text-[0.75rem] text-[var(--color-ink-faint)]">Creando el vídeo: puede tardar hasta un minuto.</p>}
+            {busy === 'video' && <p className="text-[0.75rem] text-[var(--color-ink-faint)]">Creando el vídeo en el servidor: puede tardar uno o dos minutos. Puedes esperar aquí.</p>}
           </div>
 
           {error !== null && <p role="alert" className="text-[0.82rem] text-rose-500">{error}</p>}

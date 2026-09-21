@@ -10,7 +10,7 @@ import type { MissionService } from '@acc/orchestrator';
 import { ProviderRegistry } from '@acc/providers';
 
 import { createRouter } from '../http/router.ts';
-import { pcmToWavBase64, type MediaGenerator } from './media.ts';
+import { MediaError, pcmToWavBase64, type MediaGenerator } from './media.ts';
 import { MemoryContentStore } from './store.ts';
 import { captionsFor, createReelMaker, ffmpegAvailable, findFont, wrap, type ReelMaker } from './video.ts';
 
@@ -96,10 +96,22 @@ describe('POST /api/content/:id/video', () => {
     };
   }
 
-  it('needs the picture and the voice first, then stores the video and serves it', async () => {
+  const settle = async (call: ReturnType<typeof api>, id: string) => {
+    for (let i = 0; i < 50; i += 1) {
+      const res = await call('GET', `/api/content/${id}/video`);
+      if (res.body.state !== 'running') return res.body;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    throw new Error('the video job never settled');
+  };
+
+  it('needs the picture and the voice first, answers at once, then stores the video and serves it', async () => {
     let received: any;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
     const call = api(async (input) => {
       received = input;
+      await gate;
       return { mime: 'video/mp4', base64: 'VIDEO' };
     });
     const { item } = (await call('POST', '/api/content', { title: 'X', imagePrompt: 'a', voiceText: 'Hola mundo.' })).body;
@@ -107,12 +119,36 @@ describe('POST /api/content/:id/video', () => {
     await call('POST', `/api/content/${item.id}/image`, {});
     assert.equal((await call('POST', `/api/content/${item.id}/video`)).status, 400, 'still no voice');
     await call('POST', `/api/content/${item.id}/voice`, { lang: 'es' });
-    const done = await call('POST', `/api/content/${item.id}/video`);
-    assert.equal(done.status, 200);
-    assert.equal(done.body.item.hasVideo, true);
+
+    const started = await call('POST', `/api/content/${item.id}/video`);
+    assert.equal(started.status, 202, 'the request does not wait for ffmpeg');
+    assert.equal(started.body.job.state, 'running');
+    assert.equal((await call('GET', `/api/content/${item.id}/video`)).body.state, 'running');
+    assert.equal((await call('POST', `/api/content/${item.id}/video`)).status, 202, 'a second tap does not start a second job');
+
+    release();
+    const done = await settle(call, item.id);
+    assert.equal(done.state, 'idle');
+    assert.equal(done.item.hasVideo, true);
     assert.equal(received.text, 'Hola mundo.');
     assert.deepEqual((await call('GET', `/api/content/${item.id}/media/video`)).body, { mime: 'video/mp4', base64: 'VIDEO' });
     assert.equal((await call('GET', '/api/content/status')).body.media.video, true);
+  });
+
+  it('reports a failure once, with the reason, then goes back to idle', async () => {
+    const call = api(async () => {
+      throw new MediaError('No se pudo crear el vídeo: prueba de error.');
+    });
+    const { item } = (await call('POST', '/api/content', { title: 'X', imagePrompt: 'a', voiceText: 'Hola.' })).body;
+    await call('POST', `/api/content/${item.id}/image`, {});
+    await call('POST', `/api/content/${item.id}/voice`, { lang: 'es' });
+    assert.equal((await call('POST', `/api/content/${item.id}/video`)).status, 202);
+    const failed = await settle(call, item.id);
+    assert.equal(failed.state, 'failed');
+    assert.match(failed.message, /prueba de error/);
+    const again = await call('GET', `/api/content/${item.id}/video`);
+    assert.equal(again.body.state, 'idle');
+    assert.equal(again.body.item.hasVideo, false);
   });
 
   it('says ffmpeg is missing when it is', async () => {

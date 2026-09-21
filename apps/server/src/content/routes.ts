@@ -110,6 +110,8 @@ export function contentRoutes(deps: ContentDeps): Route[] {
     }
   };
   const param = (params: Record<string, string>, name: string) => params[name] ?? '';
+  // Videos being made right now (kept in memory: a restart simply loses an unfinished one).
+  const videoJobs = new Map<string, { state: 'running' | 'failed'; message: string | null }>();
 
   return [
     {
@@ -179,6 +181,8 @@ export function contentRoutes(deps: ContentDeps): Route[] {
       },
     },
     {
+      // Starts the video in the background and answers at once: on a small free server
+      // it can take a minute or more, far longer than a request should wait.
       method: 'POST',
       pattern: '/api/content/:id/video',
       handler: async (_request, params) => {
@@ -189,10 +193,32 @@ export function contentRoutes(deps: ContentDeps): Route[] {
         const id = param(params, 'id');
         const item = await deps.store.get(id);
         if (item === null) throw notFound();
+        if (videoJobs.get(id)?.state === 'running') return json(202, { job: videoJobs.get(id) });
         const [image, audio] = await Promise.all([deps.store.getMedia(id, 'image'), deps.store.getMedia(id, 'audio')]);
         if (image === null || audio === null) throw invalid('Para crear el vídeo primero genera la imagen y la voz.');
-        const video = await run(() => makeReel({ image, audio, text: item.voiceText }));
-        return json(200, { item: await deps.store.setMedia(id, 'video', video) });
+        videoJobs.set(id, { state: 'running', message: null });
+        void makeReel({ image, audio, text: item.voiceText })
+          .then(async (video) => {
+            await deps.store.setMedia(id, 'video', video);
+            videoJobs.delete(id);
+          })
+          .catch((error: unknown) => {
+            videoJobs.set(id, { state: 'failed', message: error instanceof Error ? error.message : 'No se pudo crear el vídeo.' });
+          });
+        return json(202, { job: videoJobs.get(id) });
+      },
+    },
+    {
+      // "running" while it works, "failed" (with the reason) once, then "idle".
+      method: 'GET',
+      pattern: '/api/content/:id/video',
+      handler: async (_request, params) => {
+        const id = param(params, 'id');
+        const item = await deps.store.get(id);
+        if (item === null) throw notFound();
+        const job = videoJobs.get(id);
+        if (job?.state === 'failed') videoJobs.delete(id);
+        return json(200, { state: job?.state ?? 'idle', message: job?.message ?? null, item });
       },
     },
   ];

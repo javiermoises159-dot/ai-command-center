@@ -21,7 +21,9 @@ export const HEIGHT = 1280;
 export const MAX_SECONDS = 60;
 const LINE_CHARS = 22;
 const MAX_LINES = 4;
-const TIMEOUT_MS = 150_000;
+/** The video is made in the background, so this can be generous for a slow free server. */
+const TIMEOUT_MS = 600_000;
+const FPS = 24;
 
 export interface Caption {
   start: number;
@@ -149,23 +151,35 @@ export function createReelMaker(options: { ffmpeg?: string; ffprobe?: string } =
         );
       }
 
-      const graph = [
-        `[0:v]scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase,crop=${WIDTH}:${HEIGHT},boxblur=24:3[bg]`,
-        `[0:v]scale=${WIDTH}:-2[fg]`,
-        `[bg][fg]overlay=(W-w)/2:(H-h)/2${drawtexts.length > 0 ? `,${drawtexts.join(',')}` : ''},format=yuv420p[v]`,
-      ].join(';');
+      // The expensive part (scale, crop, blur, overlay) is done ONCE on a single frame.
+      // Looping the raw picture through that filter chain redoes it for every frame,
+      // which a small free server cannot afford. The video then only encodes a still
+      // image plus the captions.
+      const backdropPath = join(dir, 'frame.png');
+      const compose = await run(
+        ffmpeg,
+        [
+          '-y', '-loglevel', 'error', '-i', imagePath,
+          '-filter_complex',
+          `[0:v]scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase,crop=${WIDTH}:${HEIGHT},boxblur=24:3[bg];[0:v]scale=${WIDTH}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,format=rgb24[v]`,
+          '-map', '[v]', '-frames:v', '1', backdropPath,
+        ],
+        TIMEOUT_MS,
+      );
+      if (compose.code !== 0) throw new MediaError(`No se pudo preparar la imagen del vídeo: ${compose.stderr.trim().split('\n').slice(-2).join(' ').slice(0, 200)}.`);
 
+      const filters = ['format=yuv420p', ...drawtexts].join(',');
       const result = await run(
         ffmpeg,
         [
           '-y', '-loglevel', 'error',
-          '-loop', '1', '-framerate', '24', '-i', imagePath,
+          '-loop', '1', '-framerate', String(FPS), '-i', backdropPath,
           '-i', audioPath,
-          '-filter_complex', graph,
-          '-map', '[v]', '-map', '1:a',
+          '-vf', filters,
+          '-map', '0:v', '-map', '1:a',
           '-t', duration.toFixed(2),
-          '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '27', '-threads', '2',
-          '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-crf', '28', '-g', String(FPS * 2), '-threads', '1',
+          '-c:a', 'aac', '-b:a', '96k', '-ar', '44100',
           '-movflags', '+faststart',
           outPath,
         ],
