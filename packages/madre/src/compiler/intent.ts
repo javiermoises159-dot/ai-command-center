@@ -185,7 +185,7 @@ const FRESH_RE =
 const MONEY_RE = /\b(?:presupuesto|invertir|inversi[oó]n|pagar|pago|cobrar|comisi[oó]n|comisiones|trading|budget|invest\w*|pay\w*|charge|commission|fees?|pagamento|investire|commissioni)\b|[€$£]/iu;
 const PUBLISH_RE = /\b(?:publicar|publicaci[oó]n|subir|postear|redes sociales|tiktok|instagram|youtube|publish|post|upload|social media|pubblicare|social)\b/iu;
 const EXTERNAL_RE = /\b(?:enviar|mandar|contactar|comprar|registrar|contratar|correo|email|send|contact|buy|purchase|register|hire|mail|inviare|contattare|comprare)\b/iu;
-const PERSONAL_RE = /\b(?:dni|pasaporte|passport|datos personales|personal data|salud|health|n[oó]mina|payroll|iban|tarjeta|credit card|contrato|contract|codice fiscale|clientes?|customers? list)\b/iu;
+const PERSONAL_RE = /\b(?:dni|pasaporte|passport|datos personales|personal data|salud|health|n[oó]mina|payroll|iban|tarjeta|credit card|contrato|contract|codice fiscale|(?:lista|listado|base de datos|datos) de clientes|customers? (?:list|data|database)|lista clienti)\b/iu;
 
 // ---------------------------------------------------------------------------
 // Subject

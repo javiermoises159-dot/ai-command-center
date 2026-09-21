@@ -59,6 +59,12 @@ describe('intent classification', () => {
     assert.equal(intent.sensitivity.involvesPersonalData, true);
   });
 
+  it('does not treat the word "clientes" alone as personal data, but does treat a customer list as such', () => {
+    assert.equal(classifyIntent('Quiero conseguir mis primeros clientes para una tienda de cookies').sensitivity.involvesPersonalData, false);
+    assert.equal(classifyIntent('Enviar un correo a la lista de clientes').sensitivity.involvesPersonalData, true);
+    assert.equal(classifyIntent('Analizar los datos de clientes del CRM').sensitivity.involvesPersonalData, true);
+  });
+
   it('asks about missing budget and market instead of assuming them, whatever language the mission is in', () => {
     // The questions are what the user reads, so they are always in Spanish;
     // the detection behind them has to work for Spanish and English alike.
