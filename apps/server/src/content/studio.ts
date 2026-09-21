@@ -7,6 +7,7 @@
  * provider is required: a simulated one would invent things.
  */
 
+import { CONTENT_VOICE_GUIDE, PHOTO_STYLE_GUIDE, VISUAL_CRAFT_GUIDE } from '@acc/domain';
 import type { ProviderRegistry } from '@acc/providers';
 
 import { DraftError } from './draft.ts';
@@ -38,9 +39,14 @@ Reglas:
 - "platform": instagram, facebook, tiktok, youtube o telegram (instagram si no se dice).
 - "caption": texto para publicar con la pieza y 3 a 6 hashtags; puede ir vacío si es solo un logo.
 - "voiceText": guion que se dirá en voz alta (45 a 70 palabras, frases cortas). Vacío si no hace falta voz.
-- "imagePrompt": descripción visual detallada en inglés (sujeto, fondo, luz, colores, estilo). Para un logo: un emblema o símbolo sencillo, estilo vectorial plano, pocos colores, fondo liso y claro, centrado; NO pidas letras ni palabras dentro de la imagen porque el generador las deforma.
+- "imagePrompt": descripción visual detallada en inglés (sujeto, fondo, luz, colores). ${PHOTO_STYLE_GUIDE} Para un logo: un emblema o símbolo sencillo, estilo vectorial plano, pocos colores, fondo liso y claro, centrado; NO pidas letras ni palabras dentro de la imagen porque el generador las deforma.
 - "lang": idioma de la voz y los textos: es, it, en, fr, de o pt (el de la petición, o el del público si lo dice).
-- No inventes precios, direcciones, teléfonos ni datos que la persona no haya dado.`;
+- No inventes precios, direcciones, teléfonos ni datos que la persona no haya dado.
+
+${CONTENT_VOICE_GUIDE}
+
+Para logos y diseños:
+${VISUAL_CRAFT_GUIDE}`;
 
 const clip = (value: unknown, max: number): string => (typeof value === 'string' ? value.trim().slice(0, max) : '');
 

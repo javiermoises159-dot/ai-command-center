@@ -8,6 +8,7 @@
  * review, which is the point.
  */
 
+import { CONTENT_VOICE_GUIDE, PHOTO_STYLE_GUIDE } from '@acc/domain';
 import type { ProviderRegistry } from '@acc/providers';
 
 import { PLATFORMS, type ContentInput, type Platform } from './store.ts';
@@ -34,10 +35,12 @@ Reglas:
 - "title": nombre corto de la pieza, para uso interno.
 - "caption": el texto de la publicación, con 3 a 6 hashtags al final.
 - "voiceText": el guion que se dirá en voz alta, de 45 a 70 palabras (unos 20 segundos), con frases cortas y puntuación clara.
-- "imagePrompt": descripción visual concreta de la imagen (objeto, fondo, luz, colores, estilo fotográfico).
+- "imagePrompt": descripción visual concreta de la imagen (objeto, fondo, luz, colores). ${PHOTO_STYLE_GUIDE}
 - Escribe caption y voiceText en el idioma del público al que se dirige el informe (italiano si el negocio está en Italia; si no queda claro, español).
 - No inventes precios, descuentos, direcciones, teléfonos, plazos ni datos que el informe no diga. Si falta un dato, no lo menciones.
-- No prometas nada que el informe no respalde.`;
+- No prometas nada que el informe no respalde.
+
+${CONTENT_VOICE_GUIDE}`;
 
 /** The report without its embedded web page or other code blocks, and not too long. */
 export function reportForDrafting(report: string): string {

@@ -7,7 +7,7 @@
  * and later OpenAI, Anthropic, Gemini) works here without change.
  */
 
-import { DomainError, getAgentDefinition, type AIProvider, type AgentId, type ProviderResult, type ProviderTask } from '@acc/domain';
+import { CONTENT_VOICE_GUIDE, DomainError, getAgentDefinition, VISUAL_CRAFT_GUIDE, type AIProvider, type AgentId, type ProviderResult, type ProviderTask } from '@acc/domain';
 
 import { HUMAN_WRITING_GUIDE } from '../qa/prose.ts';
 import type { AgentSpec, MissionStep, ResultSource, ToolResult } from '../types.ts';
@@ -78,7 +78,8 @@ export interface ProviderLookup {
 export function buildSystemPrompt(agent: AgentSpec): string {
   const legacy = agent.legacyAgentId !== null ? getAgentDefinition(agent.legacyAgentId as AgentId) : undefined;
   const persona = legacy?.systemPrompt ?? `You are the ${agent.name} agent of an autonomous mission crew. ${agent.description}`;
-  return `${persona}\n\n${HUMAN_WRITING_GUIDE}`;
+  const craft = agent.id === 'design' || agent.legacyAgentId === 'design' ? `\n\n${VISUAL_CRAFT_GUIDE}` : agent.id === 'marketing' || agent.legacyAgentId === 'marketing' ? `\n\n${CONTENT_VOICE_GUIDE}` : '';
+  return `${persona}\n\n${HUMAN_WRITING_GUIDE}${craft}`;
 }
 
 const PROVENANCE_RULES = [

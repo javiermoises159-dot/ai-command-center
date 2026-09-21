@@ -71,6 +71,7 @@ describe('createPieceDrafter', () => {
     const pieces = await createPieceDrafter(registry)('Informe de la campaña de CookieLab');
     assert.equal(pieces.length, 2);
     assert.match(seen[0]?.systemPrompt ?? '', /No inventes precios/);
+    assert.match(seen[0]?.systemPrompt ?? '', /VOZ \(como si el dueño/); // human voice, not brochure copy
     assert.match(seen[0]?.prompt ?? '', /CookieLab/);
   });
 

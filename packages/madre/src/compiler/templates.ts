@@ -13,6 +13,7 @@
  * en Italia" alike.
  */
 
+import { VISUAL_CRAFT_GUIDE } from '@acc/domain';
 import type { Capability, Deliverable, MissionKind } from '../types.ts';
 
 export interface TaskTemplate {
@@ -405,19 +406,19 @@ export const SITE_TASK: TaskTemplate = {
   title: 'Construir la página web',
   description:
     'Construye la página o la app que pide el usuario como UN ÚNICO archivo HTML completo, en un solo bloque de código ```html que empiece por <!doctype html> y acabe en </html>. ' +
-    'Reglas obligatorias: HTML, CSS y JavaScript dentro del mismo archivo; sin scripts, fuentes, imágenes ni hojas de estilo externas (usa fuentes del sistema y dibujos SVG o emojis); ' +
+    'Reglas obligatorias: HTML, CSS y JavaScript dentro del mismo archivo; sin scripts, fuentes, imágenes ni hojas de estilo externas (usa fuentes del sistema y dibujos SVG hechos a mano; sin emojis como iconos); ' +
     'sin fetch, XMLHttpRequest, WebSocket, eval ni cookies; diseño pensado primero para móvil, con <meta name="viewport">, textos legibles y botones grandes; idioma de la página: el del público (italiano si es para Italia); ' +
     'con título <title> y una descripción. Si es una app de pedidos: una lista de productos con nombre, descripción corta y precio que el usuario pueda cambiar fácilmente en un array al principio del script; ' +
     'un carrito con + y −, el total, y campos de nombre, teléfono y notas; y un botón que abre WhatsApp con el pedido ya escrito (enlace https://wa.me/NUMERO?text=… con encodeURIComponent) y otro que copia el pedido. ' +
     'Pon el número de WhatsApp en una constante llamada WHATSAPP_NUMBER al principio del script; si el usuario no lo dio, déjala vacía y haz que el botón avise de que falta configurarla. ' +
-    'Antes del bloque escribe dos líneas: qué hace la página y qué debe cambiar el usuario (nombre, precios, número de WhatsApp). Después del bloque, di con claridad qué NO hace (no hay servidor, ni pagos, ni base de datos: los pedidos llegan por WhatsApp).',
+    'Antes del bloque escribe dos líneas: qué hace la página y qué debe cambiar el usuario (nombre, precios, número de WhatsApp). Después del bloque, di con claridad qué NO hace (no hay servidor, ni pagos, ni base de datos: los pedidos llegan por WhatsApp).\n\n' + VISUAL_CRAFT_GUIDE,
   after: ['design.brand'],
 };
 
 export const BRAND_TASK: TaskTemplate = {
   capability: 'design.brand',
   title: 'Definir la marca',
-  description: 'Define la dirección del nombre, el tono y la identidad visual que encajan con lo que pide el usuario.',
+  description: 'Define la dirección del nombre, el tono y la identidad visual que encajan con lo que pide el usuario.\n\n' + VISUAL_CRAFT_GUIDE,
 };
 
 export const LOGO_TASK: TaskTemplate = {
@@ -427,6 +428,6 @@ export const LOGO_TASK: TaskTemplate = {
     'Propón 3 opciones de logotipo distintas. Cada una lleva un nombre, una línea que explique la idea y el dibujo COMPLETO como un único bloque de código ```svg. ' +
     'Reglas del SVG: viewBox="0 0 512 512"; solo formas básicas, trazados (path), degradados y texto con fuentes genéricas (sans-serif o serif); ' +
     'colores en hexadecimal, máximo 4; sin scripts, sin imágenes ni fuentes externas y sin foreignObject; que se entienda también a 32 píxeles. ' +
-    'Después de las tres opciones, di cuál recomiendas y por qué. Si el usuario no dio el nombre de la marca, propón uno y márcalo como propuesta.',
+    'Después de las tres opciones, di cuál recomiendas y por qué. Si el usuario no dio el nombre de la marca, propón uno y márcalo como propuesta.\n\n' + VISUAL_CRAFT_GUIDE,
   after: ['design.brand'],
 };

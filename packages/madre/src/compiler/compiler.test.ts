@@ -306,3 +306,11 @@ describe('website requests', () => {
     assert.ok(!caps('Quiero abrir una tienda online de cookies en Italia.').includes('engineering.site'));
   });
 });
+
+describe('human craft guides', () => {
+  it('reach the tasks that produce visible work, and the site no longer leans on emoji icons', async () => {
+    const { SITE_TASK, LOGO_TASK, BRAND_TASK } = await import('./templates.ts');
+    for (const task of [SITE_TASK, LOGO_TASK, BRAND_TASK]) assert.match(task.description, /OFICIO VISUAL/);
+    assert.match(SITE_TASK.description, /sin emojis como iconos/);
+  });
+});
