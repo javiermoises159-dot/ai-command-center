@@ -81,6 +81,18 @@ export class CloudflareMedia {
     }
   }
 
+  /** Speech to text with timing. Whisper large-v3-turbo: audio goes in as base64, segments come back. */
+  async transcribe(audio: Media): Promise<{ start: number; end: number; text: string }[]> {
+    const data = await this.run('@cf/openai/whisper-large-v3-turbo', { audio: audio.base64 });
+    const result = (data as { result?: { segments?: unknown; text?: unknown } } | null)?.result;
+    const segments = Array.isArray(result?.segments) ? (result?.segments as Record<string, unknown>[]) : [];
+    const out = segments
+      .map((s) => ({ start: Number(s['start']), end: Number(s['end']), text: typeof s['text'] === 'string' ? s['text'].trim() : '' }))
+      .filter((s) => Number.isFinite(s.start) && Number.isFinite(s.end) && s.end > s.start && s.text !== '');
+    if (out.length === 0 && typeof result?.text === 'string' && result.text.trim() !== '') throw new MediaError('Cloudflare devolvió el texto sin tiempos.');
+    return out;
+  }
+
   async voice(text: string, lang: VoiceLang): Promise<Media> {
     if (!CLOUDFLARE_VOICE_LANGS.includes(lang)) {
       throw new MediaError('La voz de Cloudflare solo habla inglés y francés. Para español o italiano hace falta la clave de Gemini (GEMINI_API_KEY).', 400);

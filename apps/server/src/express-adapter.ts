@@ -20,6 +20,7 @@ import type { HttpMethod, HttpRequest } from './http/types.ts';
 import type { Container } from './container.ts';
 
 const MAX_BODY_BYTES = '1mb';
+const UPLOAD_PATH = '/api/content/upload';
 
 export function createExpressApp(container: Container): Express {
   const app = express();
@@ -35,10 +36,14 @@ export function createExpressApp(container: Container): Express {
   });
 
   app.disable('x-powered-by');
-  app.use(express.json({ limit: MAX_BODY_BYTES }));
+  // Video uploads carry the file as base64, far over the normal limit; their bigger
+  // parser runs only after the password check, so nobody unauthenticated can use it.
+  const small = express.json({ limit: MAX_BODY_BYTES });
+  app.use((req, res, next) => (req.path === UPLOAD_PATH ? next() : small(req, res, next)));
   app.use(cors(container.config.corsOrigins));
   app.use(rateLimit(container.config.rateLimit));
   if (container.config.accessPassword !== undefined) app.use(requirePassword(container.config.accessPassword));
+  app.use(UPLOAD_PATH, express.json({ limit: '45mb' }));
 
   // Malformed JSON arrives here as a SyntaxError from express.json. Without
   // this it would surface as an opaque 500.

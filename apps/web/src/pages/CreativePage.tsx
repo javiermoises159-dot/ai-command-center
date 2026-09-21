@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { Icon, type IconName } from '../components/icons.tsx';
 import { Badge, EmptyState, ListSkeleton, Notice, PageHeader, Panel, SectionTitle } from '../components/primitives.tsx';
+import { VideoEditPanel } from '../components/VideoEditPanel.tsx';
 import { StudioPanel } from '../components/StudioPanel.tsx';
 import { PipelinePanel } from '../components/madre/PipelinePanel.tsx';
 import { useRecentMissions } from '../hooks/useRecentMissions.ts';
@@ -70,6 +71,8 @@ export function CreativePage() {
       />
 
       <StudioPanel />
+
+      <VideoEditPanel />
 
       <Notice tone="preview" title={t.creative.notice.title}>
         {t.creative.notice.body}

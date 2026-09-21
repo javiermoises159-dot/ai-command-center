@@ -6,6 +6,7 @@ import { json, type Route } from '../http/types.ts';
 import { ALL_VOICE_LANGS, MediaError, type MediaGenerator, type VoiceLang } from './media.ts';
 import type { PieceDrafter } from './draft.ts';
 import type { StudioBriefer } from './studio.ts';
+import type { ClipMaker } from './clips.ts';
 import type { ReelMaker } from './video.ts';
 import { PLATFORMS, STATUSES, type ContentInput, type ContentPatch, type ContentStore, type MediaKind, type Platform, type ContentStatus } from './store.ts';
 
@@ -19,7 +20,12 @@ export interface ContentDeps {
   drafter?: PieceDrafter | undefined;
   /** Turns a free-text request into what the studio should generate. */
   studio?: StudioBriefer | undefined;
+  /** Cuts and edits an uploaded video from a plain-language request; undefined without ffmpeg. */
+  clips?: ClipMaker | undefined;
 }
+
+/** Largest video accepted, in bytes: a small free server has to hold it in memory. */
+export const MAX_UPLOAD_BYTES = 30 * 1024 * 1024;
 
 const invalid = (message: string) => new DomainError('validation_error', message, { status: 400, publicMessage: message });
 const notFound = () => new DomainError('not_found', 'Content item not found.', { status: 404, publicMessage: 'No existe esa pieza de contenido.' });
@@ -119,6 +125,9 @@ export function contentRoutes(deps: ContentDeps): Route[] {
   // Videos being made right now (kept in memory: a restart simply loses an unfinished one).
   const videoJobs = new Map<string, { state: 'running' | 'failed'; message: string | null }>();
 
+  // Edits running or finished since the server started (an unfinished one is lost on restart).
+  interface EditJob { state: 'running' | 'done' | 'failed'; step: string; message: string | null; notes: string[]; itemIds: string[] }
+  const editJobs = new Map<string, EditJob>();
   const startVideoJob = async (id: string, voiceText: string): Promise<void> => {
     const makeReel = deps.video;
     if (makeReel === undefined) return;
@@ -139,7 +148,7 @@ export function contentRoutes(deps: ContentDeps): Route[] {
     {
       method: 'GET',
       pattern: '/api/content/status',
-      handler: async () => json(200, { media: { image: deps.media?.image != null, voiceLangs: deps.media?.voice?.langs ?? [], video: deps.video !== undefined } }),
+      handler: async () => json(200, { media: { image: deps.media?.image != null, voiceLangs: deps.media?.voice?.langs ?? [], video: deps.video !== undefined, edit: deps.clips !== undefined } }),
     },
     {
       // "Créame un logo": the AI writes the brief, then the real generators make the
@@ -193,6 +202,65 @@ export function contentRoutes(deps: ContentDeps): Route[] {
           } else notes.push('El vídeo no se pudo crear porque falló la imagen o la voz.');
         }
         return json(201, { item, notes, videoStarted });
+      },
+    },
+    {
+      // A video the person recorded, to be edited or clipped. Kept as a draft item.
+      method: 'POST',
+      pattern: '/api/content/upload',
+      handler: async (request) => {
+        const body = (request.body ?? {}) as { title?: unknown; mime?: unknown; base64?: unknown };
+        const base64 = typeof body.base64 === 'string' ? body.base64 : '';
+        if (base64 === '') throw invalid('Falta el vídeo.');
+        const mime = typeof body.mime === 'string' && body.mime.startsWith('video/') ? body.mime : 'video/mp4';
+        if (Math.floor((base64.length * 3) / 4) > MAX_UPLOAD_BYTES) throw invalid(`El vídeo pesa demasiado (máximo ${MAX_UPLOAD_BYTES / 1024 / 1024} MB). Recórtalo un poco antes de subirlo.`);
+        const title = text(body.title, 'el título', 120) || 'Vídeo subido';
+        const item = await deps.store.create({ title: `Vídeo original: ${title}`, platform: 'other' });
+        return json(201, { item: (await deps.store.setMedia(item.id, 'video', { mime, base64 })) ?? item });
+      },
+    },
+    {
+      method: 'POST',
+      pattern: '/api/content/:id/edit',
+      handler: async (request, params) => {
+        const makeClips = deps.clips;
+        if (makeClips === undefined) throw new DomainError('conflict', 'Editing unavailable.', { status: 409, publicMessage: 'El servidor no tiene ffmpeg instalado, así que todavía no puede editar vídeos.' });
+        const id = param(params, 'id');
+        const source = await deps.store.get(id);
+        if (source === null) throw notFound();
+        const ask = text((request.body as { request?: unknown } | undefined)?.request, 'la edición que quieres', 1500, true) ?? '';
+        if (editJobs.get(id)?.state === 'running') return json(202, { job: editJobs.get(id) });
+        const video = await deps.store.getMedia(id, 'video');
+        if (video === null) throw invalid('Esta pieza no tiene ningún vídeo que editar.');
+        const job: EditJob = { state: 'running', step: 'Empezando', message: null, notes: [], itemIds: [] };
+        editJobs.set(id, job);
+        void makeClips({ video, request: ask, onStep: (step) => { job.step = step; } })
+          .then(async (made) => {
+            for (const clip of made.clips) {
+              const created = await deps.store.create({ title: clip.title, platform: 'instagram', caption: clip.caption });
+              await deps.store.setMedia(created.id, 'video', clip.video);
+              job.itemIds.push(created.id);
+            }
+            job.notes = made.notes;
+            job.state = 'done';
+            job.step = 'Listo';
+          })
+          .catch((error: unknown) => {
+            job.state = 'failed';
+            job.message = error instanceof Error ? error.message : 'No se pudo editar el vídeo.';
+          });
+        return json(202, { job });
+      },
+    },
+    {
+      method: 'GET',
+      pattern: '/api/content/:id/edit',
+      handler: async (_request, params) => {
+        const id = param(params, 'id');
+        const job = editJobs.get(id);
+        if (job === undefined) return json(200, { state: 'idle', step: '', message: null, notes: [], items: [] });
+        const items = (await Promise.all(job.itemIds.map((itemId) => deps.store.get(itemId)))).filter((i) => i !== null);
+        return json(200, { state: job.state, step: job.step, message: job.message, notes: job.notes, items });
       },
     },
     { method: 'GET', pattern: '/api/content', handler: async () => json(200, { items: await deps.store.list() }) },

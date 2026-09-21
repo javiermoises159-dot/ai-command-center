@@ -450,3 +450,7 @@ On a finished mission, **Crear piezas en Contenidos** asks a real AI provider (n
 ### Creative studio
 
 In **Creatividad**, type what you want ("un logo para mi tienda", "un reel…"). `POST /api/content/studio` has a real AI provider write the brief, then runs the real generators (Cloudflare picture, Gemini voice, ffmpeg video) and saves the result as a draft in the calendar. Videos are built from one still per caption joined with ffmpeg's concat demuxer, which is cheap enough for a free server.
+
+### Video upload, editing and clips
+
+In **Creatividad → Tus vídeos** you upload a video (max 30 MB, sent as base64 to `POST /api/content/upload`) and describe the edit in plain language. `POST /api/content/:id/edit` runs in the background: ffmpeg reads the file, Cloudflare Whisper (optional) transcribes it, a real AI provider plans the cuts, and ffmpeg renders each clip (optionally 9:16 centre-cropped, with burnt-in captions). Each clip is saved as a draft in the calendar. Publishing to platforms is not automated.

@@ -179,3 +179,46 @@ export const draftFromMission = (missionId: string) => call<{ items: ContentItem
 
 /** "Créame un logo": the server's AI prepares the brief and the real generators make it. */
 export const createInStudio = (request: string) => call<{ item: ContentItem; notes: string[]; videoStarted: boolean }>('POST', '/api/content/studio', { request });
+
+export const MAX_UPLOAD_MB = 30;
+
+/** Read a file as base64 (no data: prefix). */
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+    reader.onload = () => {
+      const result = String(reader.result);
+      resolve(result.slice(result.indexOf(',') + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function uploadVideo(file: File): Promise<ContentItem> {
+  if (file.size > MAX_UPLOAD_MB * 1024 * 1024) throw new Error(`El vídeo pesa demasiado (máximo ${MAX_UPLOAD_MB} MB). Recórtalo un poco antes de subirlo.`);
+  const base64 = await fileToBase64(file);
+  return (await call<{ item: ContentItem }>('POST', '/api/content/upload', { title: file.name.replace(/\.[^.]+$/, ''), mime: file.type || 'video/mp4', base64 })).item;
+}
+
+export type EditStatus = { state: 'idle' | 'running' | 'done' | 'failed'; step: string; message: string | null; notes: string[]; items: ContentItem[] };
+export const startEdit = (id: string, request: string) => call<unknown>('POST', `/api/content/${encodeURIComponent(id)}/edit`, { request });
+export const editStatus = (id: string) => call<EditStatus>('GET', `/api/content/${encodeURIComponent(id)}/edit`);
+
+/** Poll an edit until it is done or failed, reporting the step it is on. */
+export async function runEdit(id: string, request: string, onStep: (step: string) => void, alive: () => boolean = () => true, pollMs = 3_000, maxMs = 20 * 60_000): Promise<EditStatus> {
+  await startEdit(id, request);
+  const deadline = Date.now() + maxMs;
+  while (alive() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    const status = await editStatus(id);
+    if (status.state === 'running') {
+      onStep(status.step);
+      continue;
+    }
+    if (status.state === 'failed') throw new Error(status.message ?? 'No se pudo editar el vídeo.');
+    if (status.state === 'done') return status;
+    throw new Error('La edición no llegó a hacerse (el servidor se reinició). Inténtalo otra vez.');
+  }
+  throw new Error(alive() ? 'La edición tarda demasiado. Mira en Contenidos dentro de unos minutos.' : 'Cancelado.');
+}
