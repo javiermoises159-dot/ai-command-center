@@ -1,0 +1,176 @@
+/** REST routes for the content calendar. */
+
+import { DomainError } from '@acc/domain';
+
+import { json, type Route } from '../http/types.ts';
+import { MediaError, VOICE_LANGS, type MediaGenerator, type VoiceLang } from './media.ts';
+import { PLATFORMS, STATUSES, type ContentInput, type ContentPatch, type ContentStore, type MediaKind, type Platform, type ContentStatus } from './store.ts';
+
+export interface ContentDeps {
+  store: ContentStore;
+  /** Absent when Cloudflare is not configured: the calendar still works, media does not. */
+  media: MediaGenerator | undefined;
+}
+
+const invalid = (message: string) => new DomainError('validation_error', message, { status: 400, publicMessage: message });
+const notFound = () => new DomainError('not_found', 'Content item not found.', { status: 404, publicMessage: 'No existe esa pieza de contenido.' });
+
+function text(value: unknown, field: string, max: number, required = false): string | undefined {
+  if (value === undefined) {
+    if (required) throw invalid(`Falta ${field}.`);
+    return undefined;
+  }
+  if (typeof value !== 'string') throw invalid(`${field} debe ser texto.`);
+  const trimmed = value.trim();
+  if (required && trimmed === '') throw invalid(`Falta ${field}.`);
+  if (trimmed.length > max) throw invalid(`${field} es demasiado largo (máximo ${max} caracteres).`);
+  return trimmed;
+}
+
+function date(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) throw invalid('La fecha no es válida.');
+  return new Date(value).toISOString();
+}
+
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: string): T | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !(allowed as readonly string[]).includes(value)) throw invalid(`${field} no es válido.`);
+  return value as T;
+}
+
+export function parseCreate(body: unknown): ContentInput {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const input: ContentInput = { title: text(b.title, 'el título', 120, true) as string };
+  const caption = text(b.caption, 'el texto', 4000);
+  const imagePrompt = text(b.imagePrompt, 'la descripción de la imagen', 1500);
+  const voiceText = text(b.voiceText, 'el texto de la voz', 1500);
+  const platform = oneOf<Platform>(b.platform, PLATFORMS, 'La plataforma');
+  const scheduledAt = date(b.scheduledAt);
+  if (caption !== undefined) input.caption = caption;
+  if (imagePrompt !== undefined) input.imagePrompt = imagePrompt;
+  if (voiceText !== undefined) input.voiceText = voiceText;
+  if (platform !== undefined) input.platform = platform;
+  if (scheduledAt !== undefined) input.scheduledAt = scheduledAt;
+  return input;
+}
+
+export function parsePatch(body: unknown): ContentPatch {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const patch: ContentPatch = {};
+  const title = text(b.title, 'el título', 120);
+  if (title === '') throw invalid('El título no puede estar vacío.');
+  const caption = text(b.caption, 'el texto', 4000);
+  const imagePrompt = text(b.imagePrompt, 'la descripción de la imagen', 1500);
+  const voiceText = text(b.voiceText, 'el texto de la voz', 1500);
+  const platform = oneOf<Platform>(b.platform, PLATFORMS, 'La plataforma');
+  const status = oneOf<ContentStatus>(b.status, STATUSES, 'El estado');
+  const scheduledAt = date(b.scheduledAt);
+  if (title !== undefined) patch.title = title;
+  if (caption !== undefined) patch.caption = caption;
+  if (imagePrompt !== undefined) patch.imagePrompt = imagePrompt;
+  if (voiceText !== undefined) patch.voiceText = voiceText;
+  if (platform !== undefined) patch.platform = platform;
+  if (status !== undefined) patch.status = status;
+  if (scheduledAt !== undefined) {
+    patch.scheduledAt = scheduledAt;
+    // Giving a date to a draft schedules it; clearing it makes it a draft again.
+    if (status === undefined) patch.status = scheduledAt === null ? 'draft' : 'scheduled';
+  }
+  return patch;
+}
+
+function mediaKind(value: string | undefined): MediaKind {
+  if (value === 'image' || value === 'audio') return value;
+  throw invalid('El tipo de archivo debe ser image o audio.');
+}
+
+export function contentRoutes(deps: ContentDeps): Route[] {
+  const need = (): MediaGenerator => {
+    if (deps.media === undefined) {
+      throw new DomainError('conflict', 'Media generation is not configured.', {
+        status: 409,
+        publicMessage: 'Faltan CLOUDFLARE_ACCOUNT_ID y CLOUDFLARE_API_TOKEN en el servidor para generar imágenes y voz.',
+      });
+    }
+    return deps.media;
+  };
+  const run = async <T>(work: () => Promise<T>): Promise<T> => {
+    try {
+      return await work();
+    } catch (error) {
+      if (error instanceof MediaError) throw new DomainError('provider_failed', error.message, { status: error.status, publicMessage: error.message });
+      throw error;
+    }
+  };
+  const param = (params: Record<string, string>, name: string) => params[name] ?? '';
+
+  return [
+    {
+      method: 'GET',
+      pattern: '/api/content/status',
+      handler: async () => json(200, { media: { configured: deps.media !== undefined, voiceLangs: VOICE_LANGS } }),
+    },
+    { method: 'GET', pattern: '/api/content', handler: async () => json(200, { items: await deps.store.list() }) },
+    { method: 'POST', pattern: '/api/content', handler: async (request) => json(201, { item: await deps.store.create(parseCreate(request.body)) }) },
+    {
+      method: 'PATCH',
+      pattern: '/api/content/:id',
+      handler: async (request, params) => {
+        const item = await deps.store.update(param(params, 'id'), parsePatch(request.body));
+        if (item === null) throw notFound();
+        return json(200, { item });
+      },
+    },
+    {
+      method: 'DELETE',
+      pattern: '/api/content/:id',
+      handler: async (_request, params) => {
+        if (!(await deps.store.delete(param(params, 'id')))) throw notFound();
+        return json(200, { ok: true });
+      },
+    },
+    {
+      method: 'GET',
+      pattern: '/api/content/:id/media/:kind',
+      handler: async (_request, params) => {
+        const media = await deps.store.getMedia(param(params, 'id'), mediaKind(params.kind));
+        if (media === null) throw new DomainError('not_found', 'No media.', { status: 404, publicMessage: 'Esta pieza todavía no tiene ese archivo.' });
+        return json(200, media);
+      },
+    },
+    {
+      method: 'POST',
+      pattern: '/api/content/:id/image',
+      handler: async (request, params) => {
+        const generator = need();
+        const id = param(params, 'id');
+        const item = await deps.store.get(id);
+        if (item === null) throw notFound();
+        const prompt = text((request.body as { prompt?: unknown } | undefined)?.prompt, 'la descripción de la imagen', 1500) ?? item.imagePrompt;
+        if (prompt === '') throw invalid('Escribe primero qué imagen quieres.');
+        const media = await run(() => generator.image(prompt));
+        await deps.store.update(id, { imagePrompt: prompt });
+        return json(200, { item: await deps.store.setMedia(id, 'image', media) });
+      },
+    },
+    {
+      method: 'POST',
+      pattern: '/api/content/:id/voice',
+      handler: async (request, params) => {
+        const generator = need();
+        const id = param(params, 'id');
+        const item = await deps.store.get(id);
+        if (item === null) throw notFound();
+        const body = (request.body ?? {}) as { text?: unknown; lang?: unknown };
+        const voiceText = text(body.text, 'el texto de la voz', 1500) ?? item.voiceText;
+        if (voiceText === '') throw invalid('Escribe primero qué debe decir la voz.');
+        const lang: VoiceLang = oneOf<VoiceLang>(body.lang, VOICE_LANGS, 'El idioma') ?? 'es';
+        const media = await run(() => generator.voice(voiceText, lang));
+        await deps.store.update(id, { voiceText });
+        return json(200, { item: await deps.store.setMedia(id, 'audio', media) });
+      },
+    },
+  ];
+}

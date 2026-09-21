@@ -29,6 +29,7 @@ const ORDER: readonly { name: SectionName; icon: IconName; primary: boolean }[] 
   { name: 'research', icon: 'search', primary: false },
   { name: 'tools', icon: 'wrench', primary: false },
   { name: 'creative', icon: 'palette', primary: false },
+  { name: 'content', icon: 'calendar', primary: false },
   { name: 'activity', icon: 'activity', primary: true },
   { name: 'settings', icon: 'settings', primary: false },
 ];

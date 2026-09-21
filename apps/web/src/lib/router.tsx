@@ -17,6 +17,7 @@ export const SECTION_NAMES = [
   'research',
   'tools',
   'creative',
+  'content',
   'activity',
   'settings',
 ] as const;
@@ -37,6 +38,7 @@ const SECTION_PATHS: Record<SectionName, string> = {
   research: '/research',
   tools: '/tools',
   creative: '/creative',
+  content: '/content',
   activity: '/activity',
   settings: '/settings',
 };

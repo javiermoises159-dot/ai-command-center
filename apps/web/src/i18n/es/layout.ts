@@ -23,6 +23,7 @@ export const layout = {
       research: { label: 'Investigación', blurb: 'El futuro motor de investigación' },
       tools: { label: 'Herramientas', blurb: 'Catálogo de herramientas y estado de conexión' },
       creative: { label: 'Creatividad', blurb: 'La futura suite creativa' },
+      content: { label: 'Contenidos', blurb: 'Fotos, voz y calendario para publicar' },
       activity: { label: 'Actividad', blurb: 'Cronología de todo lo que ha ocurrido' },
       settings: { label: 'Configuración', blurb: 'Proveedores, modelos y apariencia' },
     },

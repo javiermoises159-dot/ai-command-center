@@ -4,6 +4,7 @@ import { t } from './i18n/index.ts';
 import { href, useRouter } from './lib/router.tsx';
 import { ActivityPage } from './pages/ActivityPage.tsx';
 import { AgentsPage } from './pages/AgentsPage.tsx';
+import { ContentPage } from './pages/ContentPage.tsx';
 import { CreativePage } from './pages/CreativePage.tsx';
 import { DashboardPage } from './pages/DashboardPage.tsx';
 import { KnowledgePage } from './pages/KnowledgePage.tsx';
@@ -26,6 +27,7 @@ export function App() {
       {route.name === 'research' && <ResearchPage />}
       {route.name === 'tools' && <ToolsPage />}
       {route.name === 'creative' && <CreativePage />}
+      {route.name === 'content' && <ContentPage />}
       {route.name === 'activity' && <ActivityPage />}
       {route.name === 'settings' && <SettingsPage />}
       {route.name === 'not-found' && (

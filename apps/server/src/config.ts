@@ -37,6 +37,9 @@ export interface ServerConfig {
   webSearchApiKey: string | undefined;
   /** Fine-grained token limited to the sites repository. Never sent to the browser. */
   githubToken: string | undefined;
+  /** Cloudflare Workers AI, for pictures and voice-overs. Both are needed. */
+  cloudflareAccountId: string | undefined;
+  cloudflareApiToken: string | undefined;
   /** "owner/repository" where finished websites are published (GitHub Pages). */
   githubSitesRepo: string | undefined;
   enableWikipedia: boolean;
@@ -262,6 +265,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     balanceProviders: bool(env, 'MADRE_BALANCE_PROVIDERS', env.NODE_ENV === 'production'),
     webSearchApiKey: str(env, 'TAVILY_API_KEY') ?? str(env, 'SEARCH_API_KEY'),
     githubToken: str(env, 'GITHUB_TOKEN'),
+    cloudflareAccountId: str(env, 'CLOUDFLARE_ACCOUNT_ID'),
+    cloudflareApiToken: str(env, 'CLOUDFLARE_API_TOKEN'),
     githubSitesRepo: str(env, 'GITHUB_SITES_REPO'),
     realProviders: realProviderOptionsFromEnv(env),
     disabledProviders: (str(env, 'MADRE_DISABLED_PROVIDERS') ?? '')

@@ -21,6 +21,7 @@ import type { MadreService } from '@acc/madre';
 import type { MissionService } from '@acc/orchestrator';
 import type { ProviderRegistry } from '@acc/providers';
 
+import { contentRoutes, type ContentDeps } from '../content/routes.ts';
 import { madreRoutes } from './madre-routes.ts';
 import { PublishError, type SitePublisher } from '../publish/github-pages.ts';
 import { json, matchPath, type HttpRequest, type HttpResponse, type Route } from './types.ts';
@@ -43,6 +44,8 @@ export interface RouterDeps {
   sitePublisher?: SitePublisher | undefined;
   /** What the server was given for publishing, so the screen can say what is missing. Never the token. */
   siteSettings?: { hasToken: boolean; repo: string | null } | undefined;
+  /** The content calendar (posts, pictures, voice-overs). */
+  content?: ContentDeps | undefined;
   /** Reported by /api/health so a deploy can be identified. */
   version: string;
 }
@@ -196,6 +199,7 @@ export function createRouter(deps: RouterDeps): Router {
       },
     },
 
+    ...(deps.content !== undefined ? contentRoutes(deps.content) : []),
     ...(deps.madre !== undefined ? madreRoutes(deps.madre) : []),
   ];
 

@@ -340,6 +340,14 @@ list: `.env.example` and [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 
 ---
 
+## Content calendar (Contenidos)
+
+The **Contenidos** screen (More → Contenidos) holds posts prepared in advance: a title, the text, a date and time, and the platform. For each one you can generate a **picture** (Cloudflare Workers AI, FLUX schnell) and a **voice-over** (MeloTTS: Spanish, English, French, Chinese, Japanese, Korean — Italian is not available) — both use the free Cloudflare allowance and need `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (Workers AI permission) on the server. Without them the calendar still works.
+
+When a scheduled time arrives the piece moves to **Toca publicar**. **Publicar ahora** opens the phone's share sheet with the picture and the text, so it goes to the chosen app with one more tap; nothing is posted on the person's behalf. Then **Marcar como publicado**. Automatic posting to platform APIs is a later step.
+
+Endpoints: `GET/POST /api/content`, `PATCH/DELETE /api/content/:id`, `POST /api/content/:id/image|voice`, `GET /api/content/:id/media/image|audio`, `GET /api/content/status`. Storage is the `content_items` table (migration `0002_content_items.sql`); media is kept in the row as base64.
+
 ## Publishing websites (GitHub Pages, free)
 
 A mission that asks the crew to *build* a page or a simple ordering app (for example "créame una página web y una app de pedidos") gets an `engineering.site` step. The result is ONE self-contained HTML file: no external scripts, fonts or images, no network calls; orders are sent through a WhatsApp link (there is no server and no payment). The page is shown in a sandboxed preview on the mission screen and can be downloaded.

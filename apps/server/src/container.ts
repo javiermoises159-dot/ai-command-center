@@ -18,6 +18,8 @@ import { createRepositories } from '@acc/repositories';
 
 import type { ServerConfig } from './config.ts';
 import { GitHubPagesPublisher, parseRepo, type SitePublisher } from './publish/github-pages.ts';
+import { CloudflareMedia, type MediaGenerator } from './content/media.ts';
+import { MemoryContentStore, type ContentStore } from './content/store.ts';
 import { createLogger } from './logger.ts';
 
 export interface Container {
@@ -30,6 +32,8 @@ export interface Container {
   madre: Madre;
   /** Publishes finished websites to GitHub Pages; undefined without a token. */
   sitePublisher: SitePublisher | undefined;
+  /** Content calendar storage and (when Cloudflare is configured) media generation. */
+  content: { store: ContentStore; media: MediaGenerator | undefined };
   shutdown(): Promise<void>;
 }
 
@@ -158,6 +162,21 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     logger.warn('site publishing needs both GITHUB_TOKEN and GITHUB_SITES_REPO: it is off');
   }
 
+  let contentStore: ContentStore;
+  let closeContent: (() => Promise<void>) | undefined;
+  if (config.persistence === 'postgres') {
+    const { createDatabase, PgContentStore } = await import('@acc/database');
+    const contentDb = createDatabase({ connectionString: config.databaseUrl ?? '', poolMax: 2, ssl: config.dbSsl });
+    contentStore = new PgContentStore(contentDb.pool);
+    closeContent = () => contentDb.close();
+  } else {
+    contentStore = new MemoryContentStore();
+  }
+  const media = config.cloudflareAccountId !== undefined && config.cloudflareApiToken !== undefined ? new CloudflareMedia(config.cloudflareAccountId, config.cloudflareApiToken) : undefined;
+  if (media === undefined && (config.cloudflareAccountId !== undefined || config.cloudflareApiToken !== undefined)) {
+    logger.warn('image and voice generation need both CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN: it is off');
+  }
+
   const missions = new MissionService({ repositories, providers, queue, logger, defaultMode: config.defaultMissionMode });
 
   return {
@@ -169,10 +188,12 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     missions,
     madre,
     sitePublisher,
+    content: { store: contentStore, media },
     async shutdown() {
       logger.info('draining job queue');
       await queue.stop(15_000);
       await repositories.close();
+      await closeContent?.();
     },
   };
 }
