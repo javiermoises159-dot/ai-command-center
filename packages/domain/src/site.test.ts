@@ -50,3 +50,21 @@ describe('site helpers', () => {
     assert.match(siteSlug('../../etc/passwd', 'a1'), /^[a-z0-9-]+$/);
   });
 });
+
+import { applyWhatsappNumber, whatsappDigits } from './site.ts';
+
+describe('whatsapp number', () => {
+  it('normalises international numbers and refuses junk', () => {
+    assert.equal(whatsappDigits('+39 333 123 4567'), '393331234567');
+    assert.equal(whatsappDigits('0039 333 1234567'), '393331234567');
+    assert.equal(whatsappDigits('12'), null);
+    assert.equal(whatsappDigits('"><script>'), null);
+  });
+  it('writes only digits into the constant, whatever quotes the page used', () => {
+    const page = (q: string) => `<script>\n        const WHATSAPP_NUMBER = ${q}${q}; // nota\n</script>`;
+    assert.match(applyWhatsappNumber(page('"'), '+39 333 1234567'), /const WHATSAPP_NUMBER = "393331234567"; \/\/ nota/);
+    assert.match(applyWhatsappNumber(page("'"), '333 1234567'), /WHATSAPP_NUMBER = "3331234567"/);
+    assert.equal(applyWhatsappNumber(page('"'), 'abc'), page('"'));
+    assert.equal(applyWhatsappNumber('<p>sin constante</p>', '3331234567'), '<p>sin constante</p>');
+  });
+});

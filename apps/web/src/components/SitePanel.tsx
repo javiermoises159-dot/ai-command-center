@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { checkSiteHtml, extractSiteHtml } from '@acc/contracts';
+import { applyWhatsappNumber, checkSiteHtml, extractSiteHtml, whatsappDigits } from '@acc/contracts';
 
 import { getSiteStatus, htmlDownloadUrl, publishSite, type PublishedSite, type SitePublishingStatus } from '../lib/site.ts';
 import { Button, Notice, Panel, SectionTitle } from './primitives.tsx';
@@ -10,7 +10,16 @@ import { Button, Notice, Panel, SectionTitle } from './primitives.tsx';
  * the approval; nothing is published on its own.
  */
 export function SitePanel({ missionId, finalResult }: { missionId: string; finalResult: string | null }) {
-  const html = useMemo(() => extractSiteHtml(finalResult), [finalResult]);
+  const original = useMemo(() => extractSiteHtml(finalResult), [finalResult]);
+  const [whatsapp, setWhatsapp] = useState(() => {
+    try {
+      return localStorage.getItem('acc.whatsapp') ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const html = useMemo(() => (original === null ? null : applyWhatsappNumber(original, whatsapp)), [original, whatsapp]);
+  const numberOk = whatsappDigits(whatsapp) !== null;
   const problems = useMemo(() => (html === null ? [] : checkSiteHtml(html)), [html]);
   const downloadUrl = useMemo(() => (html === null ? null : htmlDownloadUrl(html)), [html]);
   useEffect(() => () => { if (downloadUrl !== null) URL.revokeObjectURL(downloadUrl); }, [downloadUrl]);
@@ -22,9 +31,9 @@ export function SitePanel({ missionId, finalResult }: { missionId: string; final
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (html === null) return;
+    if (original === null) return;
     getSiteStatus().then(setStatus).catch(() => setStatus({ configured: false, repo: null }));
-  }, [html]);
+  }, [original]);
 
   if (html === null) return null;
 
@@ -32,7 +41,7 @@ export function SitePanel({ missionId, finalResult }: { missionId: string; final
     setBusy(true);
     setError(null);
     try {
-      setPublished(await publishSite(missionId));
+      setPublished(await publishSite(missionId, whatsapp));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo publicar.');
     } finally {
@@ -64,6 +73,32 @@ export function SitePanel({ missionId, finalResult }: { missionId: string; final
           <Notice title="No se puede publicar tal cual">{problems.join('; ')}.</Notice>
         )}
 
+        <div>
+          <label htmlFor="wa-number" className="mb-1 block text-[0.8rem] font-semibold text-[var(--color-ink)]">
+            Tu número de WhatsApp (con prefijo)
+          </label>
+          <input
+            id="wa-number"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder="+39 333 1234567"
+            value={whatsapp}
+            onChange={(e) => {
+              setWhatsapp(e.target.value);
+              try {
+                localStorage.setItem('acc.whatsapp', e.target.value);
+              } catch {
+                /* a convenience only */
+              }
+            }}
+            className="min-h-[44px] w-full rounded-xl border border-[var(--color-edge-bright)] bg-transparent px-3 text-base text-[var(--color-ink)]"
+          />
+          <p className="mt-1 text-[0.75rem] text-[var(--color-ink-faint)]">
+            {numberOk ? 'Los pedidos llegarán a este número.' : 'Sin número, el botón de WhatsApp avisará de que falta configurarlo.'}
+          </p>
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <Button variant="ghost" onClick={() => setPreview((v) => !v)}>
             {preview ? 'Ocultar vista previa' : 'Ver vista previa'}
@@ -75,7 +110,7 @@ export function SitePanel({ missionId, finalResult }: { missionId: string; final
           >
             Descargar index.html
           </a>
-          {ok && status?.configured === true && published === null && (
+          {ok && numberOk && status?.configured === true && published === null && (
             <Button onClick={publish} busy={busy}>
               Publicar en GitHub Pages
             </Button>

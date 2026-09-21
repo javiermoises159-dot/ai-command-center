@@ -8,9 +8,13 @@ import { ProviderRegistry } from '@acc/providers';
 import { PublishError, type SitePublisher } from '../publish/github-pages.ts';
 import { createRouter } from './router.ts';
 
-const HTML = '<!doctype html>\n<html lang="it"><head><meta charset="utf-8"><title>Biscotti Rossi</title></head><body><p>ciao</p></body></html>';
+const HTML = '<!doctype html>\n<html lang="it"><head><meta charset="utf-8"><title>Biscotti Rossi</title></head><body><p>ciao</p><script>const WHATSAPP_NUMBER = "";</script></body></html>';
 
 function setup(finalResults: (string | null)[], publisher?: SitePublisher) {
+  return build(finalResults, publisher);
+}
+
+function build(finalResults: (string | null)[], publisher?: SitePublisher) {
   const missions = {
     get: async () => ({
       mission: { title: 'Web de galletas' },
@@ -18,7 +22,7 @@ function setup(finalResults: (string | null)[], publisher?: SitePublisher) {
     }),
   } as unknown as MissionService;
   const router = createRouter({ missions, providers: new ProviderRegistry(), logger: silentLogger, version: 't', sitePublisher: publisher });
-  return (method: 'GET' | 'POST', path: string) => router.handle({ method, path, query: {}, body: undefined, headers: {} });
+  return (method: 'GET' | 'POST', path: string, body?: unknown) => router.handle({ method, path, query: {}, body, headers: {} });
 }
 
 const okPublisher = (seen: { slug?: string; html?: string } = {}): SitePublisher => ({
@@ -40,9 +44,18 @@ describe('site publishing endpoints', () => {
     const seen: { slug?: string; html?: string } = {};
     const res = await setup([`\`\`\`html\n${HTML.replace('Rossi', 'Viejo')}\n\`\`\``, `# Informe\n\n\`\`\`html\n${HTML}\n\`\`\``, 'sin página'], okPublisher(seen))('POST', '/api/missions/abc123def/site/publish');
     assert.equal(res.status, 200);
-    assert.equal(seen.html, HTML);
+    assert.equal(seen.html, HTML, 'without a number the page is published as delivered');
     assert.match(seen.slug ?? '', /^biscotti-rossi-abc123$/);
     assert.equal((res.body as any).site.url, `https://o.github.io/r/${seen.slug}/`);
+  });
+
+  it('writes a valid WhatsApp number into the page and ignores junk', async () => {
+    const seen: { slug?: string; html?: string } = {};
+    const run = setup([`\`\`\`html\n${HTML}\n\`\`\``], okPublisher(seen));
+    await run('POST', '/api/missions/x/site/publish', { whatsapp: '+39 333 123 4567' });
+    assert.match(seen.html ?? '', /WHATSAPP_NUMBER = "393331234567"/);
+    await run('POST', '/api/missions/x/site/publish', { whatsapp: '"><script>alert(1)</script>' });
+    assert.equal(seen.html, HTML);
   });
 
   it('answers 404 when the mission has no page and 409 when publishing is off', async () => {

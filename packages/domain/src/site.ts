@@ -67,3 +67,20 @@ export function siteSlug(title: string, uniqueId: string): string {
   const suffix = uniqueId.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6) || 'site';
   return `${base === '' ? 'sitio' : base}-${suffix}`;
 }
+
+/**
+ * Digits of an international phone number (8 to 15), or null. "+39 333 123 4567"
+ * and "0039 333…" both become "393331234567". Nothing else is ever inserted
+ * into the page, so the value cannot carry markup or code.
+ */
+export function whatsappDigits(input: string): string | null {
+  const digits = input.replace(/^\s*00/, '').replace(/\D/g, '');
+  return digits.length >= 8 && digits.length <= 15 ? digits : null;
+}
+
+/** The page with the number written into its `WHATSAPP_NUMBER` constant. Unchanged when there is no such constant or the number is invalid. */
+export function applyWhatsappNumber(html: string, input: string): string {
+  const digits = whatsappDigits(input);
+  if (digits === null) return html;
+  return html.replace(/\b(const|let|var)(\s+WHATSAPP_NUMBER\s*=\s*)(["'`])[^"'`\n]*\3/, `$1$2"${digits}"`);
+}

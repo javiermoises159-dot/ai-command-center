@@ -28,10 +28,10 @@ export async function getSiteStatus(): Promise<SitePublishingStatus> {
   return payload.publishing;
 }
 
-export async function publishSite(missionId: string): Promise<PublishedSite> {
+export async function publishSite(missionId: string, whatsapp: string): Promise<PublishedSite> {
   let response: Response;
   try {
-    response = await fetch(`/api/missions/${encodeURIComponent(missionId)}/site/publish`, { method: 'POST' });
+    response = await fetch(`/api/missions/${encodeURIComponent(missionId)}/site/publish`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ whatsapp }) });
   } catch {
     throw new Error('No se pudo conectar con el servidor.');
   }

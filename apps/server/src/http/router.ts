@@ -7,6 +7,7 @@
 
 import {
   DomainError,
+  applyWhatsappNumber,
   extractSiteHtml,
   siteSlug,
   siteTitle,
@@ -148,7 +149,7 @@ export function createRouter(deps: RouterDeps): Router {
       // Called by the "Publicar" button: the tap is the person's approval.
       method: 'POST',
       pattern: '/api/missions/:id/site/publish',
-      handler: async (_request, params) => {
+      handler: async (request, params) => {
         const publisher = deps.sitePublisher;
         if (publisher === undefined) {
           throw new DomainError('conflict', 'Publishing is not configured.', {
@@ -168,6 +169,9 @@ export function createRouter(deps: RouterDeps): Router {
         if (html === null) {
           throw new DomainError('not_found', 'No site in this mission.', { status: 404, publicMessage: 'Esta misión no tiene ninguna página web para publicar.' });
         }
+        // Optional: the number the page should send orders to. Digits only, validated.
+        const whatsapp = typeof (request.body as { whatsapp?: unknown } | undefined)?.whatsapp === 'string' ? (request.body as { whatsapp: string }).whatsapp : '';
+        html = applyWhatsappNumber(html, whatsapp);
         try {
           const site = await publisher.publish({ slug: siteSlug(siteTitle(html) || detail.mission.title, id), html, message: `Publicar «${detail.mission.title.slice(0, 60)}»` });
           log.info('site published', { missionId: id, path: site.path });
