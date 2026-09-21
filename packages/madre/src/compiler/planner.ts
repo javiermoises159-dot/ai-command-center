@@ -27,6 +27,7 @@ import type {
 import { systemClock, unique, type Clock } from '../util.ts';
 import { compileMission, taskIdFor, type CompileOptions } from './compile.ts';
 import { describeCapability } from '../capabilities.ts';
+import { keywords } from '../tools/web.ts';
 
 export interface PlanOptions {
   missionId?: string | null;
@@ -321,7 +322,7 @@ export class RulesPlanner implements Planner {
     warnings: Set<string>,
   ): ToolRequest[] {
     const requests: ToolRequest[] = [];
-    const add = (toolId: string, purpose: string, required: boolean, input: Record<string, unknown> | null): void => {
+    const add = (toolId: string, purpose: string, required: boolean, input: Record<string, unknown> | null, suffix = ''): void => {
       const spec = this.tools.get(toolId);
       if (spec === undefined) return;
       if (input === null) {
@@ -336,7 +337,7 @@ export class RulesPlanner implements Planner {
         return;
       }
       requests.push({
-        id: `${stepId}:${toolId}`,
+        id: `${stepId}:${toolId}${suffix}`,
         toolId,
         purpose,
         input,
@@ -348,7 +349,11 @@ export class RulesPlanner implements Planner {
       add('memory.recall', 'Recordar lo que ya se sabe sobre este usuario y este proyecto.', false, { query, limit: 5 });
     }
     if ((fresh || capability.startsWith('research.')) && agent.optionalTools.includes('web.search')) {
-      add('web.search', 'Consultar fuentes actuales.', false, { query: query.slice(0, 300) });
+      // Several narrow searches find more than one long one: the topic on its
+      // own, then the angles this kind of step needs (competitors, prices, rules).
+      const topic = keywords(query, 8) || query.slice(0, 120);
+      const queries = [...new Set([topic, ...(SEARCH_ANGLES[capability] ?? []).map((angle) => `${angle} ${topic}`)])].slice(0, MAX_SEARCHES_PER_STEP);
+      queries.forEach((q, i) => add('web.search', i === 0 ? 'Consultar fuentes actuales.' : `Buscar fuentes: ${q.slice(0, 60)}`, false, { query: q.slice(0, 300), limit: 5 }, i === 0 ? '' : `#${i + 1}`));
     }
     if (capability.startsWith('research.') && agent.optionalTools.includes('research.wikipedia')) {
       add('research.wikipedia', 'Contexto enciclopédico con fuente citable.', false, { title: query.slice(0, 150) });
@@ -391,6 +396,16 @@ export class RulesPlanner implements Planner {
 }
 
 /** What a retrieval tool should look for on behalf of one task: the mission's subject plus the task's own title. */
+const MAX_SEARCHES_PER_STEP = 3;
+
+/** Extra angles to search for, by the kind of research the step does. */
+const SEARCH_ANGLES: Partial<Record<string, string[]>> = {
+  'research.competitors': ['competidores alternativas', 'precios tarifas'],
+  'research.market': ['mercado tamaño demanda', 'precios tarifas'],
+  'research.regulatory': ['normativa requisitos licencias', 'costes trámites'],
+  'research.audience': ['clientes perfil demanda', 'opiniones problemas'],
+};
+
 function searchQuery(compiled: CompiledMission, task: MissionTask): string {
   const subject = compiled.intent.subject ?? compiled.objective.text;
   return `${subject} ${task.title}`.replace(/\s+/g, ' ').trim().slice(0, 300);

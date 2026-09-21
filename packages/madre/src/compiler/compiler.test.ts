@@ -187,6 +187,15 @@ describe('planner', () => {
     assert.ok(!plan.gaps.some((g) => g.blocking));
   });
 
+  it('searches a research step from several angles, with unique request ids', () => {
+    const plan = planner().plan('Quiero lanzar una tienda online de cookies en Italia.');
+    const research = plan.steps.find((s) => s.id === 's-research-market')!;
+    const searches = research.toolRequests.filter((t) => t.toolId === 'web.search');
+    assert.ok(searches.length >= 2 && searches.length <= 3);
+    assert.equal(new Set(searches.map((t) => t.id)).size, searches.length);
+    assert.equal(new Set(searches.map((t) => JSON.stringify(t.input))).size, searches.length);
+  });
+
   it('requests tools only where the agent lists them, and never requires an unavailable one', () => {
     const plan = planner().plan('Quiero lanzar una tienda online de cookies en Italia.');
     const research = plan.steps.find((s) => s.id === 's-research-market')!;
