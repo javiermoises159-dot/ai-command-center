@@ -81,7 +81,7 @@ export function VideoEditPanel() {
   }
 
   return (
-    <Panel className="space-y-3">
+    <Panel className="space-y-3 p-4">
       <SectionTitle>Tus vídeos: editar y hacer clips</SectionTitle>
       <p className="text-sm text-[var(--color-ink-dim)]">
         Sube un vídeo tuyo (máximo {MAX_UPLOAD_MB} MB, si es más largo recórtalo antes en tu iPhone) y dile qué quieres: «3 clips de 20 segundos, verticales y con subtítulos», «quita los primeros 5 segundos»… Los clips quedan como borradores en Contenidos.

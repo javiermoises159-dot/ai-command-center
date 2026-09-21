@@ -102,8 +102,8 @@ describe('content calendar', () => {
     const res = await off('POST', `/api/content/${made.id}/image`, {});
     assert.equal(res.status, 409);
     assert.match(JSON.stringify(res.body), /CLOUDFLARE_API_TOKEN/);
-    assert.deepEqual((await off('GET', '/api/content/status')).body.media, { image: false, voiceLangs: [], video: false, edit: false });
-    assert.deepEqual((await api()('GET', '/api/content/status')).body.media, { image: true, voiceLangs: ['es', 'it', 'en'], video: false, edit: false });
+    assert.deepEqual((await off('GET', '/api/content/status')).body.media, { image: false, voiceLangs: [], video: false, edit: false, assistant: false });
+    assert.deepEqual((await api()('GET', '/api/content/status')).body.media, { image: true, voiceLangs: ['es', 'it', 'en'], video: false, edit: false, assistant: false });
   });
 
   it('shows the media provider\'s own message when it fails', async () => {

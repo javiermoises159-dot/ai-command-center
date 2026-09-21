@@ -74,8 +74,15 @@ export interface MediaStatus {
   image: boolean;
   voiceLangs: VoiceLang[];
   video: boolean;
+  edit?: boolean;
+  assistant?: boolean;
+  /** Networks where a finished piece can really be published (each only on the person's tap). */
+  publishers: { target: 'telegram' | 'facebook'; label: string }[];
 }
-export const mediaStatus = async () => (await call<{ media: MediaStatus }>('GET', '/api/content/status')).media;
+export const mediaStatus = async (): Promise<MediaStatus> => {
+  const res = await call<{ media: Omit<MediaStatus, 'publishers'>; publishers?: MediaStatus['publishers'] }>('GET', '/api/content/status');
+  return { ...res.media, publishers: res.publishers ?? [] };
+};
 export const createContent = async (input: NewContent) => (await call<{ item: ContentItem }>('POST', '/api/content', input)).item;
 export const updateContent = async (id: string, patch: Partial<NewContent> & { status?: ContentStatus }) =>
   (await call<{ item: ContentItem }>('PATCH', `/api/content/${encodeURIComponent(id)}`, patch)).item;
@@ -221,4 +228,30 @@ export async function runEdit(id: string, request: string, onStep: (step: string
     throw new Error('La edición no llegó a hacerse (el servidor se reinició). Inténtalo otra vez.');
   }
   throw new Error(alive() ? 'La edición tarda demasiado. Mira en Contenidos dentro de unos minutos.' : 'Cancelado.');
+}
+
+export const publishTo = async (id: string, target: 'telegram' | 'facebook') =>
+  (await call<{ item: ContentItem }>('POST', `/api/content/${encodeURIComponent(id)}/publish`, { target })).item;
+
+export interface AssistantStatus {
+  state: 'running' | 'done' | 'failed';
+  step: string;
+  reply: string;
+  notes: string[];
+  message: string | null;
+  items: ContentItem[];
+}
+
+/** "Prepárame una campaña": the assistant plans and does it in the background; poll until it is done. */
+export async function askAssistant(request: string, onUpdate: (s: AssistantStatus) => void, alive: () => boolean = () => true, pollMs = 2_500, maxMs = 15 * 60_000): Promise<AssistantStatus> {
+  const { id } = await call<{ id: string }>('POST', '/api/assistant', { request });
+  const deadline = Date.now() + maxMs;
+  while (alive() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    const status = await call<AssistantStatus>('GET', `/api/assistant/${encodeURIComponent(id)}`);
+    onUpdate(status);
+    if (status.state === 'failed') throw new Error(status.message ?? 'No se pudo completar la petición.');
+    if (status.state === 'done') return status;
+  }
+  throw new Error(alive() ? 'Tarda demasiado. Mira en Contenidos dentro de unos minutos.' : 'Cancelado.');
 }

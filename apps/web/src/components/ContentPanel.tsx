@@ -22,7 +22,7 @@ export function ContentPanel({ missionId }: { missionId: string }) {
   }
 
   return (
-    <Panel className="space-y-3">
+    <Panel className="space-y-3 p-4">
       <SectionTitle>Contenidos para redes</SectionTitle>
       <p className="text-sm text-[var(--color-ink-dim)]">Convierte este informe en borradores de publicaciones (texto, guion de voz e idea de foto). Tarda unos 10–30 segundos.</p>
       <Button busy={busy} onClick={() => void go()}>Crear piezas en Contenidos</Button>

@@ -16,6 +16,7 @@ import {
   listContent,
   localInputToIso,
   mediaStatus,
+  publishTo,
   shareContent,
   updateContent,
   type Bucket,
@@ -262,6 +263,15 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
       return saved;
     });
 
+  const publishReal = (target: 'telegram' | 'facebook', label: string) =>
+    run(`pub-${target}`, async () => {
+      if (!window.confirm(`¿Publicar «${item.title}» ahora en ${label}? Se enviará de verdad.`)) return;
+      await updateContent(item.id, { caption });
+      const done = await publishTo(item.id, target);
+      setInfo(`Publicado en ${label}.`);
+      return done;
+    });
+
   const publish = () =>
     run('share', async () => {
       // Save the latest text first so what is shared is what is on screen.
@@ -355,7 +365,10 @@ function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; m
             <Button onClick={() => void save()} busy={busy === 'save'}>Guardar</Button>
             {item.status !== 'published' && (
               <>
-                <Button variant="ghost" onClick={() => void publish()} busy={busy === 'share'}>Publicar ahora</Button>
+                {(media?.publishers ?? []).map((p) => (
+                  <Button key={p.target} onClick={() => void publishReal(p.target, p.label)} busy={busy === `pub-${p.target}`}>Publicar en {p.label}</Button>
+                ))}
+                <Button variant="ghost" onClick={() => void publish()} busy={busy === 'share'}>Compartir desde el móvil</Button>
                 <Button variant="ghost" onClick={() => void run('done', () => updateContent(item.id, { status: 'published' }))} busy={busy === 'done'}>Marcar como publicado</Button>
               </>
             )}

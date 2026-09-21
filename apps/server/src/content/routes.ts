@@ -7,8 +7,10 @@ import { ALL_VOICE_LANGS, MediaError, type MediaGenerator, type VoiceLang } from
 import type { PieceDrafter } from './draft.ts';
 import type { StudioBriefer } from './studio.ts';
 import type { ClipMaker } from './clips.ts';
+import { runAssistant, spreadDates, type AssistantPlanner, type AssistantTools } from './assistant.ts';
+import type { Publisher } from './publish.ts';
 import type { ReelMaker } from './video.ts';
-import { PLATFORMS, STATUSES, type ContentInput, type ContentPatch, type ContentStore, type MediaKind, type Platform, type ContentStatus } from './store.ts';
+import { PLATFORMS, STATUSES, type Media, type ContentInput, type ContentPatch, type ContentStore, type MediaKind, type Platform, type ContentStatus } from './store.ts';
 
 export interface ContentDeps {
   store: ContentStore;
@@ -22,6 +24,10 @@ export interface ContentDeps {
   studio?: StudioBriefer | undefined;
   /** Cuts and edits an uploaded video from a plain-language request; undefined without ffmpeg. */
   clips?: ClipMaker | undefined;
+  /** Turns "prepárame una campaña" into actions on the tools above. */
+  assistant?: AssistantPlanner | undefined;
+  /** Where a finished piece can really be published (only on the person's tap). */
+  publishers?: readonly Publisher[] | undefined;
 }
 
 /** Largest video accepted, in bytes: a small free server has to hold it in memory. */
@@ -144,11 +150,120 @@ export function contentRoutes(deps: ContentDeps): Route[] {
       });
   };
 
+
+  const startEditJob = (id: string, ask: string, video: Media): EditJob => {
+    const makeClips = deps.clips!;
+      const job: EditJob = { state: 'running', step: 'Empezando', message: null, notes: [], itemIds: [] };
+      editJobs.set(id, job);
+      void makeClips({ video, request: ask, onStep: (step) => { job.step = step; } })
+        .then(async (made) => {
+          for (const clip of made.clips) {
+            const created = await deps.store.create({ title: clip.title, platform: 'instagram', caption: clip.caption });
+            await deps.store.setMedia(created.id, 'video', clip.video);
+            job.itemIds.push(created.id);
+          }
+          job.notes = made.notes;
+          job.state = 'done';
+          job.step = 'Listo';
+        })
+        .catch((error: unknown) => {
+          job.state = 'failed';
+          job.message = error instanceof Error ? error.message : 'No se pudo editar el vídeo.';
+        });
+    return job;
+  };
+
+  const studioCreate = async (ask: string) => {
+    if (deps.studio === undefined) throw new DomainError('conflict', 'Studio unavailable.', { status: 409, publicMessage: 'No hay ninguna IA real conectada para preparar la creación.' });
+      let brief;
+      try {
+        brief = await deps.studio(ask);
+      } catch (error) {
+        if (error instanceof Error && error.name === 'DraftError') {
+          const status = (error as { status?: number }).status ?? 502;
+          throw new DomainError('provider_failed', error.message, { status, publicMessage: error.message });
+        }
+        throw error;
+      }
+      let item = await deps.store.create({ title: brief.title, platform: brief.platform, caption: brief.caption, voiceText: brief.voiceText, imagePrompt: brief.imagePrompt });
+      const notes: string[] = [];
+      let videoStarted = false;
+      if (brief.wants.includes('image')) {
+        if (deps.media?.image == null) notes.push('La imagen no se pudo crear: falta conectar Cloudflare.');
+        else {
+          try {
+            item = (await deps.store.setMedia(item.id, 'image', await deps.media.image(brief.imagePrompt))) ?? item;
+          } catch (error) {
+            notes.push(`La imagen no se pudo crear: ${error instanceof Error ? error.message : 'error'}`);
+          }
+        }
+      }
+      if (brief.wants.includes('voice')) {
+        const voice = deps.media?.voice;
+        if (voice == null) notes.push('La voz no se pudo crear: falta conectar Gemini.');
+        else {
+          const lang = voice.langs.includes(brief.lang) ? brief.lang : voice.langs[0];
+          try {
+            if (lang === undefined) throw new MediaError('No hay idiomas de voz disponibles.');
+            item = (await deps.store.setMedia(item.id, 'audio', await voice.speak(brief.voiceText, lang))) ?? item;
+          } catch (error) {
+            notes.push(`La voz no se pudo crear: ${error instanceof Error ? error.message : 'error'}`);
+          }
+        }
+      }
+      if (brief.wants.includes('video')) {
+        if (deps.video === undefined) notes.push('El vídeo no se pudo crear: el servidor no tiene ffmpeg.');
+        else if (item.hasImage && item.hasAudio) {
+          await startVideoJob(item.id, brief.voiceText);
+          videoStarted = true;
+        } else notes.push('El vídeo no se pudo crear porque falló la imagen o la voz.');
+      }
+    return { item, notes, videoStarted };
+  };
+
+  // ---- assistant: one request, several actions, run in the background ----
+  interface AssistantJob { state: 'running' | 'done' | 'failed'; step: string; reply: string; notes: string[]; itemIds: string[]; message: string | null }
+  const assistantJobs = new Map<string, AssistantJob>();
+  const assistantTools: AssistantTools = {
+    create: async (ask) => {
+      const made = await studioCreate(ask);
+      return { itemIds: [made.item.id], notes: made.notes };
+    },
+    campaign: async (topic, pieces, days) => {
+      if (deps.drafter === undefined) throw new Error('No hay ninguna IA real conectada para escribir la campaña.');
+      const written = (await deps.drafter(topic)).slice(0, pieces);
+      const dates = spreadDates(written.length, days);
+      const itemIds: string[] = [];
+      const notes: string[] = [];
+      for (const [index, piece] of written.entries()) {
+        const created = await deps.store.create({ ...piece, scheduledAt: dates[index] ?? null });
+        itemIds.push(created.id);
+        if (piece.imagePrompt !== undefined && piece.imagePrompt !== '' && deps.media?.image != null) {
+          try {
+            await deps.store.setMedia(created.id, 'image', await deps.media.image(piece.imagePrompt));
+          } catch (error) {
+            notes.push(`«${piece.title}»: sin imagen (${error instanceof Error ? error.message : 'error'})`);
+          }
+        }
+      }
+      return { itemIds, notes };
+    },
+    editLatestVideo: async (ask) => {
+      if (deps.clips === undefined) throw new Error('El servidor no tiene ffmpeg, así que no puede editar vídeos.');
+      const uploaded = (await deps.store.list()).filter((i) => i.hasVideo && i.title.startsWith('Vídeo original'));
+      const latest = uploaded.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))[0];
+      const video = latest === undefined ? null : await deps.store.getMedia(latest.id, 'video');
+      if (latest === undefined || video === null) throw new Error('No hay ningún vídeo subido. Súbelo primero en Creatividad → Tus vídeos.');
+      startEditJob(latest.id, ask, video);
+      return { notes: [`Estoy cortando «${latest.title.replace('Vídeo original: ', '')}». Los clips aparecerán en Contenidos en unos minutos.`] };
+    },
+  };
+
   return [
     {
       method: 'GET',
       pattern: '/api/content/status',
-      handler: async () => json(200, { media: { image: deps.media?.image != null, voiceLangs: deps.media?.voice?.langs ?? [], video: deps.video !== undefined, edit: deps.clips !== undefined } }),
+      handler: async () => json(200, { media: { image: deps.media?.image != null, voiceLangs: deps.media?.voice?.langs ?? [], video: deps.video !== undefined, edit: deps.clips !== undefined, assistant: deps.assistant !== undefined }, publishers: (deps.publishers ?? []).map((p) => ({ target: p.target, label: p.label })) }),
     },
     {
       // "Créame un logo": the AI writes the brief, then the real generators make the
@@ -158,50 +273,7 @@ export function contentRoutes(deps: ContentDeps): Route[] {
       handler: async (request) => {
         if (deps.studio === undefined) throw new DomainError('conflict', 'Studio unavailable.', { status: 409, publicMessage: 'No hay ninguna IA real conectada para preparar la creación.' });
         const ask = text((request.body as { request?: unknown } | undefined)?.request, 'lo que quieres crear', 2000, true) ?? '';
-        let brief;
-        try {
-          brief = await deps.studio(ask);
-        } catch (error) {
-          if (error instanceof Error && error.name === 'DraftError') {
-            const status = (error as { status?: number }).status ?? 502;
-            throw new DomainError('provider_failed', error.message, { status, publicMessage: error.message });
-          }
-          throw error;
-        }
-        let item = await deps.store.create({ title: brief.title, platform: brief.platform, caption: brief.caption, voiceText: brief.voiceText, imagePrompt: brief.imagePrompt });
-        const notes: string[] = [];
-        let videoStarted = false;
-        if (brief.wants.includes('image')) {
-          if (deps.media?.image == null) notes.push('La imagen no se pudo crear: falta conectar Cloudflare.');
-          else {
-            try {
-              item = (await deps.store.setMedia(item.id, 'image', await deps.media.image(brief.imagePrompt))) ?? item;
-            } catch (error) {
-              notes.push(`La imagen no se pudo crear: ${error instanceof Error ? error.message : 'error'}`);
-            }
-          }
-        }
-        if (brief.wants.includes('voice')) {
-          const voice = deps.media?.voice;
-          if (voice == null) notes.push('La voz no se pudo crear: falta conectar Gemini.');
-          else {
-            const lang = voice.langs.includes(brief.lang) ? brief.lang : voice.langs[0];
-            try {
-              if (lang === undefined) throw new MediaError('No hay idiomas de voz disponibles.');
-              item = (await deps.store.setMedia(item.id, 'audio', await voice.speak(brief.voiceText, lang))) ?? item;
-            } catch (error) {
-              notes.push(`La voz no se pudo crear: ${error instanceof Error ? error.message : 'error'}`);
-            }
-          }
-        }
-        if (brief.wants.includes('video')) {
-          if (deps.video === undefined) notes.push('El vídeo no se pudo crear: el servidor no tiene ffmpeg.');
-          else if (item.hasImage && item.hasAudio) {
-            await startVideoJob(item.id, brief.voiceText);
-            videoStarted = true;
-          } else notes.push('El vídeo no se pudo crear porque falló la imagen o la voz.');
-        }
-        return json(201, { item, notes, videoStarted });
+        return json(201, await studioCreate(ask));
       },
     },
     {
@@ -232,23 +304,7 @@ export function contentRoutes(deps: ContentDeps): Route[] {
         if (editJobs.get(id)?.state === 'running') return json(202, { job: editJobs.get(id) });
         const video = await deps.store.getMedia(id, 'video');
         if (video === null) throw invalid('Esta pieza no tiene ningún vídeo que editar.');
-        const job: EditJob = { state: 'running', step: 'Empezando', message: null, notes: [], itemIds: [] };
-        editJobs.set(id, job);
-        void makeClips({ video, request: ask, onStep: (step) => { job.step = step; } })
-          .then(async (made) => {
-            for (const clip of made.clips) {
-              const created = await deps.store.create({ title: clip.title, platform: 'instagram', caption: clip.caption });
-              await deps.store.setMedia(created.id, 'video', clip.video);
-              job.itemIds.push(created.id);
-            }
-            job.notes = made.notes;
-            job.state = 'done';
-            job.step = 'Listo';
-          })
-          .catch((error: unknown) => {
-            job.state = 'failed';
-            job.message = error instanceof Error ? error.message : 'No se pudo editar el vídeo.';
-          });
+        const job = startEditJob(id, ask, video);
         return json(202, { job });
       },
     },
@@ -261,6 +317,61 @@ export function contentRoutes(deps: ContentDeps): Route[] {
         if (job === undefined) return json(200, { state: 'idle', step: '', message: null, notes: [], items: [] });
         const items = (await Promise.all(job.itemIds.map((itemId) => deps.store.get(itemId)))).filter((i) => i !== null);
         return json(200, { state: job.state, step: job.step, message: job.message, notes: job.notes, items });
+      },
+    },
+    {
+      method: 'POST',
+      pattern: '/api/assistant',
+      handler: async (request) => {
+        const plan = deps.assistant;
+        if (plan === undefined) throw new DomainError('conflict', 'Assistant unavailable.', { status: 409, publicMessage: 'No hay ninguna IA real conectada para entender la petición.' });
+        const ask = text((request.body as { request?: unknown } | undefined)?.request, 'lo que quieres que haga', 2000, true) ?? '';
+        const id = crypto.randomUUID();
+        const job: AssistantJob = { state: 'running', step: 'Entendiendo tu petición', reply: '', notes: [], itemIds: [], message: null };
+        assistantJobs.set(id, job);
+        for (const old of [...assistantJobs.keys()].slice(0, Math.max(0, assistantJobs.size - 20))) assistantJobs.delete(old);
+        void (async () => {
+          const uploaded = (await deps.store.list()).some((i) => i.hasVideo && i.title.startsWith('Vídeo original'));
+          const made = await plan(ask, { hasUploadedVideo: uploaded });
+          job.reply = made.reply;
+          const outcome = await runAssistant(made, assistantTools, (step) => { job.step = step; });
+          job.itemIds = outcome.itemIds;
+          job.notes = outcome.notes;
+          job.state = 'done';
+          job.step = 'Listo';
+        })().catch((error: unknown) => {
+          job.state = 'failed';
+          job.message = error instanceof Error ? error.message : 'No se pudo completar la petición.';
+        });
+        return json(202, { id });
+      },
+    },
+    {
+      method: 'GET',
+      pattern: '/api/assistant/:jobId',
+      handler: async (_request, params) => {
+        const job = assistantJobs.get(param(params, 'jobId'));
+        if (job === undefined) throw new DomainError('not_found', 'No such job.', { status: 404, publicMessage: 'Esa petición ya no existe (el servidor se reinició). Vuelve a pedirla.' });
+        const items = (await Promise.all(job.itemIds.map((itemId) => deps.store.get(itemId)))).filter((i) => i !== null);
+        return json(200, { state: job.state, step: job.step, reply: job.reply, notes: job.notes, message: job.message, items });
+      },
+    },
+    {
+      // The tap on this button is the approval: nothing publishes on its own.
+      method: 'POST',
+      pattern: '/api/content/:id/publish',
+      handler: async (request, params) => {
+        const target = (request.body as { target?: unknown } | undefined)?.target;
+        const publisher = (deps.publishers ?? []).find((p) => p.target === target);
+        if (publisher === undefined) throw invalid('Esa red no está conectada en el servidor.');
+        const id = param(params, 'id');
+        const item = await deps.store.get(id);
+        if (item === null) throw notFound();
+        const [image, audio, video] = await Promise.all([deps.store.getMedia(id, 'image'), deps.store.getMedia(id, 'audio'), deps.store.getMedia(id, 'video')]);
+        const caption = item.caption.trim() !== '' ? item.caption : item.title;
+        const result = await run(() => publisher.publish({ caption, image, audio, video }));
+        const updated = await deps.store.update(id, { status: 'published' });
+        return json(200, { result, item: updated ?? item });
       },
     },
     { method: 'GET', pattern: '/api/content', handler: async () => json(200, { items: await deps.store.list() }) },

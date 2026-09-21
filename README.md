@@ -454,3 +454,7 @@ In **Creatividad**, type what you want ("un logo para mi tienda", "un reel…").
 ### Video upload, editing and clips
 
 In **Creatividad → Tus vídeos** you upload a video (max 30 MB, sent as base64 to `POST /api/content/upload`) and describe the edit in plain language. `POST /api/content/:id/edit` runs in the background: ffmpeg reads the file, Cloudflare Whisper (optional) transcribes it, a real AI provider plans the cuts, and ffmpeg renders each clip (optionally 9:16 centre-cropped, with burnt-in captions). Each clip is saved as a draft in the calendar. Publishing to platforms is not automated.
+
+### Assistant and real publishing
+
+On the Panel, **Pídeme lo que quieras** sends one free-text request to `POST /api/assistant`. A real AI provider turns it into up to four actions from a fixed menu (`create`, `campaign`, `edit_video`); they run in the background (poll `GET /api/assistant/:id`). Campaigns become dated draft pieces with pictures. Publishing is not on the menu: `POST /api/content/:id/publish` runs only when the person taps a button, through the adapters in `content/publish.ts` (Telegram: `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`; Facebook page: `FACEBOOK_PAGE_ID` + `FACEBOOK_PAGE_TOKEN`). Instagram and TikTok stay manual through the phone's share sheet.

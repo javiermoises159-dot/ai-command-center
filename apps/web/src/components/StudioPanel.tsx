@@ -80,7 +80,7 @@ export function StudioPanel() {
 
   const name = (item?.title ?? 'creacion').slice(0, 40) || 'creacion';
   return (
-    <Panel className="space-y-3">
+    <Panel className="space-y-3 p-4">
       <SectionTitle>Estudio: dile qué crear</SectionTitle>
       <p className="text-sm text-[var(--color-ink-dim)]">
         Escribe lo que quieres, por ejemplo «un logo para mi tienda de cookies en Turín» o «un reel para presentar mi tienda». La IA lo prepara y lo crea sola. Queda guardado como borrador en Contenidos.

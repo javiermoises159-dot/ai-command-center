@@ -1,4 +1,5 @@
 import { MissionCard } from '../components/MissionCard.tsx';
+import { AssistantPanel } from '../components/AssistantPanel.tsx';
 import { MissionForm } from '../components/MissionForm.tsx';
 import { CommandCenter } from '../components/madre/CommandCenter.tsx';
 import { Icon } from '../components/icons.tsx';
@@ -30,6 +31,8 @@ export function DashboardPage() {
 
   return (
     <div className="acc-stagger space-y-7">
+      <AssistantPanel />
+
       {/* ------------------------------------------------------------ Command */}
       <section>
         <p className="mb-2 flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-[var(--color-signal)]">
