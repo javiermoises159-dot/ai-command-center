@@ -30,7 +30,7 @@ const OPENAI = { apiKey: KEY, models: ['gpt-test'] };
 const ANTHROPIC = { apiKey: KEY, models: ['claude-test'] };
 const GEMINI = { apiKey: KEY, models: ['gemini-test'] };
 
-function setup(registryOptions: RegistryOptions = {}, options: { budget?: Budget; prices?: PriceTable; disabled?: string[] } = {}) {
+function setup(registryOptions: RegistryOptions = {}, options: { budget?: Budget; prices?: PriceTable; disabled?: string[]; balance?: boolean } = {}) {
   const { store } = createHarness();
   const clock = new FakeClock();
   const registry = createProviderRegistry({ mock: { minLatencyMs: 0, maxLatencyMs: 0 }, ...registryOptions });
@@ -39,16 +39,37 @@ function setup(registryOptions: RegistryOptions = {}, options: { budget?: Budget
   const catalog = new ProviderCatalog(() => registry.describe());
   for (const id of options.disabled ?? []) catalog.disable(id, 'apagado por el operador');
   const cost = new CostController(store, options.budget, options.prices);
-  const router = new SmartRouter(agents, catalog, tools, new PermissionPolicy(), cost, { clock });
+  const router = new SmartRouter(agents, catalog, tools, new PermissionPolicy(), cost, { clock, balanceTies: options.balance === true });
   catalog.attachCircuit((id) => router.circuitState(id));
   const plan = new RulesPlanner(agents, tools).plan('Quiero lanzar una tienda online de cookies en Italia.');
   const step = plan.steps.find((s) => s.id === 's-strategy-positioning')!;
   const route = (o: RouteOptions = {}) => router.route(step, { missionId: 'm1', ...o });
-  return { router, catalog, clock, route, registry, step };
+  return { router, catalog, clock, route, registry, step, plan };
 }
 
 const excludedCodes = (d: Awaited<ReturnType<ReturnType<typeof setup>['route']>>) =>
   Object.fromEntries((d.explanation?.excludedCandidates ?? []).map((e) => [`${e.providerId}${e.model !== null ? `/${e.model}` : ''}`, e.code]));
+
+describe('smart router — load balancing', () => {
+  it('alternates between tied providers across steps, and stays put when it is off', async () => {
+    const options = { openai: OPENAI, gemini: GEMINI };
+    const on = setup(options, { balance: true });
+    const off = setup(options);
+    const agentSteps = on.plan.steps.filter((s) => s.kind === 'agent');
+    const chosenOn = new Set<string>();
+    const chosenOff = new Set<string>();
+    for (const s of agentSteps) {
+      chosenOn.add((await on.router.route(s, { missionId: 'm1' })).provider?.id ?? 'none');
+      chosenOff.add((await off.router.route(s, { missionId: 'm1' })).provider?.id ?? 'none');
+    }
+    assert.deepEqual([...chosenOff], ['gemini'], 'without balancing the first by name always wins');
+    assert.deepEqual([...chosenOn].sort(), ['gemini', 'openai'], 'with balancing both are used');
+    // and the same step always lands on the same provider
+    const a = await on.route();
+    const b = await on.route();
+    assert.equal(a.provider?.id, b.provider?.id);
+  });
+});
 
 describe('smart router — real providers', () => {
   describe('selection', () => {

@@ -95,6 +95,7 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     webSearchApiKey: config.webSearchApiKey,
     enableWikipedia: config.enableWikipedia,
     enableWebFetch: config.enableWebFetch,
+    balanceProviders: config.balanceProviders,
     disabledProviders: config.disabledProviders,
     engine: {
       parallelism: config.madre.parallelism,

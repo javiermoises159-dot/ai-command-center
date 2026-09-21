@@ -83,6 +83,8 @@ export interface MadreConfig {
   ollamaBaseUrl?: string | undefined;
   /** Tavily key for `web.search`. Absent leaves the tool NOT_CONNECTED. Never sent to the browser. */
   webSearchApiKey?: string | undefined;
+  /** Alternate between equally good providers, step by step. Off by default. */
+  balanceProviders?: boolean | undefined;
   /** Turns on `research.wikipedia` (public API, no key). Off by default so nothing reaches the network unasked. */
   enableWikipedia?: boolean | undefined;
   /** Turns on `web.fetch` and lets `web.search` read its top pages. Off by default. */
@@ -363,7 +365,7 @@ export function createMadre(config: MadreConfig): Madre {
   const cost = new CostController(store, config.budget, config.prices);
   const memory = new MemoryService(store);
   const approvals = new ApprovalService(store);
-  const router = new SmartRouter(agents, catalog, tools, policy, cost, { clock });
+  const router = new SmartRouter(agents, catalog, tools, policy, cost, { clock, balanceTies: config.balanceProviders === true });
   catalog.attachCircuit((providerId) => router.circuitState(providerId));
   const planner = config.planner ?? new RulesPlanner(agents, tools);
   const runner = config.runner ?? new ProviderStepRunner(config.providers);

@@ -37,6 +37,7 @@ export interface ServerConfig {
   webSearchApiKey: string | undefined;
   enableWikipedia: boolean;
   enableWebFetch: boolean;
+  balanceProviders: boolean;
   /**
    * Credentials and models for OpenAI, Anthropic and Gemini. SERVER ONLY: this
    * object holds API keys, so it is handed to the provider constructors and
@@ -247,6 +248,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     ollamaBaseUrl: str(env, 'OLLAMA_BASE_URL'),
     enableWikipedia: bool(env, 'WIKIPEDIA_ENABLED', env.NODE_ENV === 'production'),
     enableWebFetch: bool(env, 'WEB_FETCH_ENABLED', env.NODE_ENV === 'production'),
+    balanceProviders: bool(env, 'MADRE_BALANCE_PROVIDERS', env.NODE_ENV === 'production'),
     webSearchApiKey: str(env, 'TAVILY_API_KEY') ?? str(env, 'SEARCH_API_KEY'),
     realProviders: realProviderOptionsFromEnv(env),
     disabledProviders: (str(env, 'MADRE_DISABLED_PROVIDERS') ?? '')

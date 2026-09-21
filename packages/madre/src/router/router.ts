@@ -114,6 +114,12 @@ export interface RouterOptions {
   policy?: Partial<RoutingPolicy>;
   /** Time source for the circuit breaker. Injected so tests can control it. */
   clock?: Clock;
+  /**
+   * Alternate between providers that tie on everything that matters (tier,
+   * score, quality), instead of always choosing the first by name. Off by
+   * default so routing stays fully predictable unless the operator asks.
+   */
+  balanceTies?: boolean;
 }
 
 interface Candidate {
@@ -165,6 +171,7 @@ export class SmartRouter {
   private readonly routing: RoutingPolicy;
   private readonly circuit: CircuitBreaker;
   private readonly clock: Clock;
+  private readonly balanceTies: boolean;
 
   constructor(
     private readonly agents: AgentRegistry,
@@ -176,6 +183,7 @@ export class SmartRouter {
   ) {
     this.routing = resolveRoutingPolicy(options.policy);
     this.clock = options.clock ?? systemClock;
+    this.balanceTies = options.balanceTies === true;
     this.circuit = new CircuitBreaker(this.clock, {
       threshold: this.routing.circuitBreakerThreshold,
       cooldownMs: this.routing.circuitBreakerCooldownMs,
@@ -606,7 +614,28 @@ export class SmartRouter {
       agentPreference(agent.preferredTiers, a.provider.tier) - agentPreference(agent.preferredTiers, b.provider.tier) ||
       a.provider.id.localeCompare(b.provider.id) ||
       a.model.id.localeCompare(b.model.id);
-    const ranked = [...eligible].sort(compare);
+    const sorted = [...eligible].sort(compare);
+    // Load balancing: providers that tie exactly are alternated from step to
+    // step (stable for a given step), so one free quota is not drained alone.
+    let balancedAmong = 0;
+    const ranked = ((): Candidate[] => {
+      if (!this.balanceTies || sorted.length < 2) return sorted;
+      const first = sorted[0]!;
+      const tied = (c: Candidate): boolean =>
+        demoted(c) === demoted(first) &&
+        tierRank(policy, c.model.tier) === tierRank(policy, first.model.tier) &&
+        scoreOf(c).total === scoreOf(first).total &&
+        c.model.quality === first.model.quality;
+      const leaders: Candidate[] = [];
+      for (const c of sorted) {
+        if (!tied(c)) break;
+        if (!leaders.some((l) => l.provider.id === c.provider.id)) leaders.push(c);
+      }
+      if (leaders.length < 2) return sorted;
+      balancedAmong = leaders.length;
+      const pick = leaders[stableHash(step.id) % leaders.length]!;
+      return [pick, ...sorted.filter((c) => c !== pick)];
+    })();
     // Weaker or less suitable candidates still make sense as fallbacks, after the eligible ones.
     const others = pool.filter((c) => !eligible.includes(c)).sort(compare);
     ex.ranked = ranked;
@@ -710,6 +739,9 @@ export class SmartRouter {
       `Escalera de la política: ${policy.tierOrder.map(labelTier).join(' → ')}; el simulado siempre es el último recurso.`,
       `Se ha elegido ${provider.label} (${model.id}, valorado en ${model.quality}/5, ${labelTier(model.tier)}) por ser el nivel más bajo de la escalera que cumple lo que pide el paso.`,
     );
+    if (balancedAmong > 1) {
+      decision.rationale.push(`Reparto de carga: ${balancedAmong} proveedores estaban igualados y se alterna entre ellos de un paso a otro.`);
+    }
     const sameTier = ranked.filter((c) => tierRank(policy, c.model.tier) === tierRank(policy, chosen.model.tier));
     if (sameTier.length > 1) {
       decision.rationale.push(
@@ -814,4 +846,14 @@ export function computePriorities(plan: MissionPlan): Map<string, number> {
   };
   const max = Math.max(1, ...plan.steps.map((s) => remaining(s.id)));
   return new Map(plan.steps.map((s) => [s.id, max - remaining(s.id) + 1]));
+}
+
+/** A small, stable string hash (FNV-1a), so the same step always lands on the same provider. */
+function stableHash(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
 }
