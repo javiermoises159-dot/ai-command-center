@@ -71,7 +71,7 @@ describe('smart router — real providers', () => {
       const codes = excludedCodes(d);
       assert.equal(codes['anthropic'], 'unconfigured');
       assert.equal(codes['gemini'], 'unconfigured');
-      assert.equal(codes['openai-compatible'], 'not_implemented');
+      assert.equal(codes['openai-compatible'], 'unconfigured');
       assert.equal(codes['mock/mock-1'], 'mock_last_resort');
       const unconfigured = ex.excludedCandidates.find((e) => e.providerId === 'anthropic')!;
       assert.equal(unconfigured.errorCode, 'PROVIDER_UNCONFIGURED');

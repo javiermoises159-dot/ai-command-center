@@ -25,7 +25,7 @@ de herramienta → ejecución → resultado → trace/audit → continuación).
 | Anthropic | Adapter real (`real/anthropic.ts`) | `POST {base}/messages` (`max_tokens` obligatorio) | `x-api-key` + `anthropic-version: 2023-06-01` |
 | Google Gemini | Adapter real (`real/gemini.ts`), **Google AI Studio (clave de la Gemini API), no Vertex** | `POST {base}/models/{modelo}:generateContent` | cabecera `x-goog-api-key` (la clave nunca va en la URL) |
 | Ollama | **No implementado en esta fase** (sigue como el proveedor local ya preparado; requiere una máquina con Ollama) | — | — |
-| OpenAI-compatible | Stub (`planned/openai-compatible.ts`): figura como `planned`, seleccionarlo devuelve 503 | — | — |
+| OpenAI-compatible | Adapter real (`real/openai-compatible.ts`): OpenRouter, Groq, Cerebras, Mistral, GitHub Models… Requiere `OPENAI_COMPAT_BASE_URL`, `OPENAI_COMPAT_API_KEY` y `OPENAI_COMPAT_MODEL` (sin URL por defecto) | `POST {base}/chat/completions` (`max_tokens`; si falta `usage`, cuenta 0) | `Authorization: Bearer` |
 | Mock | Simulación local, siempre marcada `source: mock`, `simulated: true` | — | — |
 
 Los adapters usan `fetch` simple (inyectable en tests), **sin SDK** y **sin

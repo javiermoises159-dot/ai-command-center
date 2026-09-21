@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { DomainError, ProviderNotConfiguredError, type ProviderTask } from '@acc/domain';
+import { DomainError, ProviderError, type ProviderTask } from '@acc/domain';
+import { fakeFetch } from './real/fixtures.test-support.ts';
 import { MockProvider } from './mock/mock-provider.ts';
 import { SIMULATION_NOTICE } from './mock/generators.ts';
-import { createProviderRegistry, ProviderRegistry } from './index.ts';
-import { OpenAICompatibleProvider } from './planned/openai-compatible.ts';
+import { createProviderRegistry, OpenAICompatibleProvider, ProviderRegistry } from './index.ts';
 import { createRng, hashString } from './mock/rng.ts';
 
 const noSleep = () => Promise.resolve();
@@ -104,19 +104,35 @@ describe('MockProvider', () => {
   });
 });
 
-describe('planned providers', () => {
-  it('reject execution with an explicit not-implemented error', async () => {
+describe('openai-compatible provider', () => {
+  it('is unconfigured without base URL, key and model, and fails loudly', async () => {
     await assert.rejects(new OpenAICompatibleProvider().execute(task()), (error: unknown) => {
-      assert.ok(error instanceof ProviderNotConfiguredError);
-      assert.equal(error.status, 503);
-      assert.match(error.message, /esbozo declarado, no una implementación/);
+      assert.ok(error instanceof ProviderError);
+      assert.equal(error.providerCode, 'PROVIDER_UNCONFIGURED');
       return true;
     });
   });
 
-  it('never silently fall back to the mock', async () => {
+  it('needs a base URL even when key and model are set', () => {
+    const p = new OpenAICompatibleProvider({ apiKey: 'k-test', models: ['m-1'] });
+    assert.equal(p.availability, 'unconfigured');
+    assert.match(p.configuration().reason ?? '', /OPENAI_COMPAT_BASE_URL/);
+  });
+
+  it('calls {baseUrl}/chat/completions and tolerates a missing usage block', async () => {
+    const { fetch, requests } = fakeFetch({ body: { id: 'r1', choices: [{ message: { content: 'hola' }, finish_reason: 'stop' }] } });
+    const p = new OpenAICompatibleProvider({ apiKey: 'k-test', models: ['m-1'], baseUrl: 'https://host.example/v1/', fetch, label: 'OpenRouter' });
+    assert.equal(p.label, 'OpenRouter');
+    const result = await p.execute(task({ model: 'm-1' }));
+    assert.equal(requests[0]?.url, 'https://host.example/v1/chat/completions');
+    assert.equal(result.text, 'hola');
+    assert.equal(result.usage.totalTokens, 0);
+    assert.equal(result.simulated, false);
+  });
+
+  it('never silently falls back to the mock', () => {
     const registry = createProviderRegistry();
-    assert.throws(() => registry.resolve('openai-compatible'), /not implemented/i);
+    assert.throws(() => registry.resolve('openai-compatible'), /./);
   });
 });
 
@@ -135,10 +151,10 @@ describe('ProviderRegistry', () => {
       ['anthropic', 'gemini', 'mock', 'ollama', 'openai', 'openai-compatible'],
     );
     assert.equal(described.filter((d) => d.availability === 'available').length, 1);
-    // Ollama (no server) and the OpenAI-compatible stub are planned; the three
-    // real vendors are implemented but unconfigured — a different state.
-    assert.equal(described.filter((d) => d.availability === 'planned').length, 2);
-    assert.equal(described.filter((d) => d.availability === 'unconfigured').length, 3);
+    // Ollama (no server) is planned; the real vendors and the OpenAI-compatible
+    // adapter are implemented but unconfigured — a different state.
+    assert.equal(described.filter((d) => d.availability === 'planned').length, 1);
+    assert.equal(described.filter((d) => d.availability === 'unconfigured').length, 4);
   });
 
   it('resolves the default provider and its first model', () => {

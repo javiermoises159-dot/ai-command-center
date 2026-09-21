@@ -250,7 +250,7 @@ describe('MADRE through the API', () => {
     assert.equal(openai.executable, false);
     assert.equal(openai.healthy, null);
     assert.equal(openai.source, 'real');
-    assert.equal(providers.find((p: any) => p.id === 'openai-compatible').status, 'NOT_CONNECTED');
+    assert.equal(providers.find((p: any) => p.id === 'openai-compatible').status, 'UNCONFIGURED');
 
     const permissions = (await s.call('GET', '/api/madre/permissions')).body.modes;
     assert.equal(permissions.FINANCIAL, 'BLOCK');

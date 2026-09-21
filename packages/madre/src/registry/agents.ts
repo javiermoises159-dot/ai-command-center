@@ -133,7 +133,7 @@ export function defaultAgentSpecs(): AgentSpec[] {
       legacyAgentId: 'research',
       capabilities: ['research.market', 'research.competitors', 'research.regulatory', 'research.audience', 'research.documents'],
       outputs: ['contexto de mercado', 'actores comparables', 'restricciones', 'preguntas abiertas'],
-      optionalTools: ['web.search', 'web.fetch', 'memory.recall'],
+      optionalTools: ['web.search', 'research.wikipedia', 'web.fetch', 'memory.recall'],
       preferredTiers: ['external', 'local_strong', 'local'],
       minModelQuality: 3,
       costClass: 'medium',

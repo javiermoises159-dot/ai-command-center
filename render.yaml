@@ -36,3 +36,13 @@ services:
         sync: false
       - key: GEMINI_MODEL
         sync: false
+      # Any OpenAI-compatible host, e.g. OpenRouter (free models).
+      - key: OPENAI_COMPAT_BASE_URL
+        sync: false
+      - key: OPENAI_COMPAT_API_KEY
+        sync: false
+      - key: OPENAI_COMPAT_MODEL
+        sync: false
+      # Free web search (Tavily). Wikipedia is on by default and needs no key.
+      - key: TAVILY_API_KEY
+        sync: false

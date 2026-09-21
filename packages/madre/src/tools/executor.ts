@@ -15,6 +15,7 @@ import type { MemoryService } from '../memory/service.ts';
 import type { ToolRegistry } from '../registry/tools.ts';
 import type { MemoryScope, ToolRequest, ToolResult } from '../types.ts';
 import { CalculatorError, evaluate } from './calculator.ts';
+import { defaultWebFetch, tavilySearch, WebToolError, wikipedia, type WebFetch } from './web.ts';
 
 export interface ToolContext {
   missionId: string;
@@ -35,7 +36,7 @@ export interface ToolExecutor {
 }
 
 /** The tools this executor implements. Everything else in the catalog is declared, not built. */
-export const IMPLEMENTED_TOOLS: ReadonlySet<string> = new Set(['memory.recall', 'math.calculator']);
+export const IMPLEMENTED_TOOLS: ReadonlySet<string> = new Set(['memory.recall', 'math.calculator', 'research.wikipedia', 'web.search']);
 
 const MEMORY_SCOPES: readonly MemoryScope[] = ['user', 'project', 'mission', 'session'];
 const MAX_RECALL = 20;
@@ -44,13 +45,14 @@ export class LocalToolExecutor implements ToolExecutor {
   constructor(
     private readonly tools: ToolRegistry,
     private readonly memory: MemoryService,
+    private readonly web: { fetch?: WebFetch | undefined; searchApiKey?: string | undefined } = {},
   ) {}
 
   canRun(toolId: string): boolean {
     return IMPLEMENTED_TOOLS.has(toolId);
   }
 
-  async execute(request: ToolRequest, _context: ToolContext): Promise<ToolResult> {
+  async execute(request: ToolRequest, context: ToolContext): Promise<ToolResult> {
     const base = { toolId: request.toolId, requestId: request.id };
     const spec = this.tools.get(request.toolId);
     const name = spec?.name ?? request.toolId;
@@ -91,6 +93,26 @@ export class LocalToolExecutor implements ToolExecutor {
           }
           return { ...base, ok: true, verified: true, error: null, output: { expression, value: evaluate(expression) } };
         }
+        case 'research.wikipedia': {
+          const { title, lang } = request.input;
+          if (typeof title !== 'string') {
+            return { ...base, ok: false, output: null, error: 'Falta el título o la consulta.', verified: false, stage: 'execution', code: 'invalid_input' };
+          }
+          const output = await wikipedia(this.web.fetch ?? defaultWebFetch, title, typeof lang === 'string' ? lang : 'es', context.signal);
+          // A source that can be cited, but a wiki is not a primary source: not "verified".
+          return { ...base, ok: true, verified: false, error: null, output: { ...output } };
+        }
+        case 'web.search': {
+          const { query, limit } = request.input;
+          if (typeof query !== 'string') {
+            return { ...base, ok: false, output: null, error: 'Falta la consulta.', verified: false, stage: 'execution', code: 'invalid_input' };
+          }
+          if (this.web.searchApiKey === undefined) {
+            return { ...base, ok: false, output: null, error: 'La búsqueda web no tiene clave (TAVILY_API_KEY).', verified: false, stage: 'execution', code: 'execution_error' };
+          }
+          const output = await tavilySearch(this.web.fetch ?? defaultWebFetch, this.web.searchApiKey, query, typeof limit === 'number' ? limit : 5, context.signal);
+          return { ...base, ok: true, verified: false, error: null, output: { ...output } };
+        }
         default:
           return { ...base, ok: false, output: null, error: `${name} no tiene ejecutor en esta versión.`, verified: false, stage: 'executor', code: 'no_executor' };
       }
@@ -100,7 +122,7 @@ export class LocalToolExecutor implements ToolExecutor {
         ...base,
         ok: false,
         output: null,
-        error: error instanceof CalculatorError ? message : `${name} falló al ejecutarse: ${message}`,
+        error: error instanceof CalculatorError || error instanceof WebToolError ? message : `${name} falló al ejecutarse: ${message}`,
         verified: false,
         stage: 'execution',
         code: 'execution_error',

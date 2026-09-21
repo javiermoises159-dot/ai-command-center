@@ -504,7 +504,7 @@ describe('registry with real adapters', () => {
     assert.deepEqual([byId['openai']!.availability, byId['openai']!.configured, byId['openai']!.implemented], ['available', true, true]);
     assert.deepEqual([byId['anthropic']!.availability, byId['anthropic']!.configured], ['unconfigured', false], 'a key without a model is not configured');
     assert.deepEqual([byId['gemini']!.availability, byId['gemini']!.configured], ['unconfigured', false]);
-    assert.deepEqual([byId['openai-compatible']!.availability, byId['openai-compatible']!.implemented], ['planned', false]);
+    assert.deepEqual([byId['openai-compatible']!.availability, byId['openai-compatible']!.implemented], ['unconfigured', true]);
     assert.deepEqual(registry.availableIds().sort(), ['mock', 'openai']);
   });
 

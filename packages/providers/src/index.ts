@@ -1,5 +1,5 @@
 import { MockProvider, type MockProviderOptions } from './mock/mock-provider.ts';
-import { OpenAICompatibleProvider } from './planned/openai-compatible.ts';
+import { OpenAICompatibleProvider, type OpenAICompatibleOptions } from './real/openai-compatible.ts';
 import { AnthropicProvider } from './real/anthropic.ts';
 import { GeminiProvider } from './real/gemini.ts';
 import { OpenAIProvider } from './real/openai.ts';
@@ -17,7 +17,7 @@ export { GeminiProvider } from './real/gemini.ts';
 export { RealProvider, TEXT_ONLY, type RealProviderOptions } from './real/real-provider.ts';
 export { realProviderOptionsFromEnv, type RealProviderEnv } from './real/env.ts';
 export { scrub, type HttpFetch } from './real/http.ts';
-export { OpenAICompatibleProvider } from './planned/openai-compatible.ts';
+export { OpenAICompatibleProvider, type OpenAICompatibleOptions } from './real/openai-compatible.ts';
 export { OllamaProvider, discoverOllamaModels, type FetchLike, type OllamaOptions } from './local/ollama.ts';
 
 export interface ProviderRegistryOptions {
@@ -27,6 +27,7 @@ export interface ProviderRegistryOptions {
   openai?: RealProviderOptions;
   anthropic?: RealProviderOptions;
   gemini?: RealProviderOptions;
+  openaiCompatible?: OpenAICompatibleOptions;
 }
 
 /**
@@ -36,15 +37,15 @@ export interface ProviderRegistryOptions {
  * router). OpenAI, Anthropic and Gemini are real adapters: `available` only when
  * their key and model are configured, `unconfigured` otherwise — and an
  * unconfigured one fails when executed; it does not fall back to the mock.
- * Ollama is available when a server answers. The OpenAI-compatible adapter is
- * still a declared stub.
+ * Ollama is available when a server answers. The OpenAI-compatible adapter
+ * (OpenRouter, Groq, Cerebras, Mistral…) is real too, and needs its own base URL.
  */
 export function createProviderRegistry(options: ProviderRegistryOptions = {}): ProviderRegistry {
   const ollama = new OllamaProvider(options.ollama);
   const openai = new OpenAIProvider(options.openai);
   const anthropic = new AnthropicProvider(options.anthropic);
   const gemini = new GeminiProvider(options.gemini);
-  const notImplemented = 'Adaptador declarado, aún sin implementar. Seleccionarlo devuelve un error.';
+  const compat = new OpenAICompatibleProvider(options.openaiCompatible);
 
   return new ProviderRegistry()
     .register(new MockProvider(options.mock ?? {}), {
@@ -57,5 +58,5 @@ export function createProviderRegistry(options: ProviderRegistryOptions = {}): P
     .register(openai)
     .register(anthropic)
     .register(gemini)
-    .register(new OpenAICompatibleProvider(), { note: notImplemented });
+    .register(compat);
 }

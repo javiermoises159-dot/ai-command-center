@@ -348,6 +348,9 @@ export class RulesPlanner implements Planner {
       add('memory.recall', 'Recordar lo que ya se sabe sobre este usuario y este proyecto.', false, { query, limit: 5 });
     }
     if (fresh && agent.optionalTools.includes('web.search')) add('web.search', 'Consultar fuentes actuales.', false, { query });
+    if (capability.startsWith('research.') && agent.optionalTools.includes('research.wikipedia')) {
+      add('research.wikipedia', 'Contexto enciclopédico con fuente citable.', false, { title: query.slice(0, 150) });
+    }
     if (capability.startsWith('finance.') && agent.optionalTools.includes('math.calculator')) {
       add('math.calculator', 'Comprobar las cuentas.', false, null);
     }

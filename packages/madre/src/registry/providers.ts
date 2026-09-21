@@ -84,10 +84,10 @@ const META: Record<string, ProviderMeta> = {
     label: 'Endpoint compatible con OpenAI',
     tier: 'external',
     privacy: 'third_party',
-    requires: 'OPENAI_COMPAT_BASE_URL y clave',
+    requires: 'OPENAI_COMPAT_BASE_URL, OPENAI_COMPAT_API_KEY y OPENAI_COMPAT_MODEL',
     whenAvailable: 'CONNECTED',
-    notConnected: 'Adaptador declarado, sin implementar. No se usan credenciales.',
-    connected: 'Conectado.',
+    notConnected: 'Sin configurar: faltan OPENAI_COMPAT_BASE_URL, OPENAI_COMPAT_API_KEY y OPENAI_COMPAT_MODEL. No se sustituye por una simulación.',
+    connected: 'Configurado (OpenRouter, Groq, Cerebras, Mistral…). Las llamadas salen del servidor; la clave nunca llega al navegador.',
   },
 };
 
@@ -142,7 +142,7 @@ const CAPABILITIES: Record<string, ModelCapabilities> = {
   openai: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: true, vision: true },
   anthropic: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: true },
   gemini: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: true, vision: true },
-  'openai-compatible': { streaming: true, toolCalling: true, structuredOutput: true, embeddings: true, vision: false },
+  'openai-compatible': { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
 };
 
 function capabilitiesFor(providerId: string): ModelCapabilities {

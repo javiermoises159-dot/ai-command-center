@@ -7,6 +7,7 @@
  *
  *   OpenAI      OPENAI_API_KEY      OPENAI_MODEL      OPENAI_API_BASE_URL
  *   Anthropic   ANTHROPIC_API_KEY   ANTHROPIC_MODEL   ANTHROPIC_API_BASE_URL   ANTHROPIC_MAX_TOKENS
+ *   Compatible  OPENAI_COMPAT_API_KEY  OPENAI_COMPAT_MODEL  OPENAI_COMPAT_BASE_URL (required)  OPENAI_COMPAT_LABEL
  *   Gemini      GOOGLE_API_KEY      GEMINI_MODEL      GEMINI_API_BASE_URL
  *               (GEMINI_API_KEY is accepted as an alias: it is the name earlier
  *                versions of `.env.example` used)
@@ -16,12 +17,14 @@
  * for the operator would mean spending their money on a model they never chose.
  */
 
+import type { OpenAICompatibleOptions } from './openai-compatible.ts';
 import type { RealProviderOptions } from './real-provider.ts';
 
 export interface RealProviderEnv {
   openai: RealProviderOptions;
   anthropic: RealProviderOptions;
   gemini: RealProviderOptions;
+  openaiCompatible: OpenAICompatibleOptions;
 }
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -60,6 +63,12 @@ export function realProviderOptionsFromEnv(env: Env): RealProviderEnv {
       apiKey: value(env, 'GOOGLE_API_KEY') ?? value(env, 'GEMINI_API_KEY'),
       models: list(env, 'GEMINI_MODEL'),
       baseUrl: value(env, 'GEMINI_API_BASE_URL'),
+    },
+    openaiCompatible: {
+      apiKey: value(env, 'OPENAI_COMPAT_API_KEY'),
+      models: list(env, 'OPENAI_COMPAT_MODEL'),
+      baseUrl: value(env, 'OPENAI_COMPAT_BASE_URL'),
+      label: value(env, 'OPENAI_COMPAT_LABEL'),
     },
   };
 }

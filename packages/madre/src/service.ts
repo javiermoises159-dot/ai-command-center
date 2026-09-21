@@ -29,6 +29,7 @@ import { createToolRegistry, type ToolRegistry } from './registry/tools.ts';
 import { SmartRouter } from './router/router.ts';
 import { KINDS, MadreStore } from './store.ts';
 import { LocalToolExecutor } from './tools/executor.ts';
+import type { WebFetch } from './tools/web.ts';
 import { ToolPipeline } from './tools/pipeline.ts';
 import type {
   ApprovalRequest,
@@ -79,6 +80,12 @@ export interface MadreConfig {
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   /** Only used to probe the local model server's health. Never sent to the browser. */
   ollamaBaseUrl?: string | undefined;
+  /** Tavily key for `web.search`. Absent leaves the tool NOT_CONNECTED. Never sent to the browser. */
+  webSearchApiKey?: string | undefined;
+  /** Turns on `research.wikipedia` (public API, no key). Off by default so nothing reaches the network unasked. */
+  enableWikipedia?: boolean | undefined;
+  /** Injected in tests so tools never touch the network. */
+  toolFetch?: WebFetch | undefined;
   /** Injected in tests so a health probe never touches the network. */
   healthFetch?: HealthFetch;
 }
@@ -357,7 +364,16 @@ export function createMadre(config: MadreConfig): Madre {
   const planner = config.planner ?? new RulesPlanner(agents, tools);
   const runner = config.runner ?? new ProviderStepRunner(config.providers);
 
-  const toolPipeline = new ToolPipeline({ tools, policy, cost, audit, executor: new LocalToolExecutor(tools, memory) });
+  if (config.enableWikipedia === true) {
+    tools.setStatus('research.wikipedia', 'AVAILABLE', 'API pública de Wikipedia, sin clave. Devuelve la introducción del artículo que mejor coincide, con su URL.');
+  }
+  if (config.webSearchApiKey !== undefined && config.webSearchApiKey.trim() !== '') {
+    tools.setStatus('web.search', 'AVAILABLE', 'Conectada a Tavily (plan gratuito). Las consultas salen del servidor; la clave nunca llega al navegador.');
+  }
+  const toolPipeline = new ToolPipeline({
+    tools, policy, cost, audit,
+    executor: new LocalToolExecutor(tools, memory, { fetch: config.toolFetch, searchApiKey: config.webSearchApiKey?.trim() || undefined }),
+  });
 
   const engine = new MadreEngine({
     repositories: config.repositories,

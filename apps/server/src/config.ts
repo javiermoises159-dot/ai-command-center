@@ -34,6 +34,8 @@ export interface ServerConfig {
   defaultMissionMode: 'classic' | 'madre';
   /** Base URL of a local Ollama server. Unset means Ollama is NOT CONNECTED. */
   ollamaBaseUrl: string | undefined;
+  webSearchApiKey: string | undefined;
+  enableWikipedia: boolean;
   /**
    * Credentials and models for OpenAI, Anthropic and Gemini. SERVER ONLY: this
    * object holds API keys, so it is handed to the provider constructors and
@@ -197,7 +199,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   }
 
   const accessPassword = str(env, 'APP_PASSWORD');
-  const hasRealKey = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'].some(
+  const hasRealKey = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'OPENAI_COMPAT_API_KEY', 'TAVILY_API_KEY'].some(
     (name) => str(env, name) !== undefined,
   );
   if (env.NODE_ENV === 'production' && hasRealKey && accessPassword === undefined && !bool(env, 'ALLOW_OPEN_ACCESS', false)) {
@@ -242,6 +244,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
 
     defaultMissionMode: modeRaw,
     ollamaBaseUrl: str(env, 'OLLAMA_BASE_URL'),
+    enableWikipedia: bool(env, 'WIKIPEDIA_ENABLED', env.NODE_ENV === 'production'),
+    webSearchApiKey: str(env, 'TAVILY_API_KEY') ?? str(env, 'SEARCH_API_KEY'),
     realProviders: realProviderOptionsFromEnv(env),
     disabledProviders: (str(env, 'MADRE_DISABLED_PROVIDERS') ?? '')
       .split(',')
