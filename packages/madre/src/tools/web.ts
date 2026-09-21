@@ -159,3 +159,72 @@ export async function tavilySearch(fetch: WebFetch, apiKey: string, query: strin
   }
   return { query: q, results, provider: 'tavily', fetchedAt: new Date().toISOString() };
 }
+
+export interface NewsArticle {
+  title: string;
+  url: string;
+  domain: string;
+  language: string;
+  publishedAt: string | null;
+}
+
+export interface NewsOutput {
+  query: string;
+  articles: NewsArticle[];
+  provider: 'gdelt';
+  fetchedAt: string;
+}
+
+/** GDELT writes dates as 20260921T103000Z. */
+function gdeltDate(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(raw);
+  return m === null ? null : `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`;
+}
+
+/**
+ * Recent news through the GDELT DOC API: free, no key. It indexes news from
+ * thousands of outlets in many languages. Only titles and links come back —
+ * enough to cite and to see what is being written about a subject.
+ */
+export async function gdeltNews(fetch: WebFetch, query: string, limit: number, signal?: AbortSignal): Promise<NewsOutput> {
+  // GDELT parses operators inside the query: keep plain words only.
+  const q = keywords(query.replace(/["():]/g, ' '), 6) || clip(query, 80).replace(/["():]/g, ' ');
+  if (q.trim().length < 3) throw new WebToolError('Falta la consulta.');
+  const max = Math.max(1, Math.min(15, Math.floor(limit)));
+  const params = new URLSearchParams({ query: q, mode: 'artlist', format: 'json', maxrecords: String(max), sort: 'datedesc', timespan: '3months' });
+  let response;
+  try {
+    response = await fetch(`https://api.gdeltproject.org/api/v2/doc/doc?${params.toString()}`, { headers: { 'user-agent': USER_AGENT }, ...(signal === undefined ? {} : { signal }) });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    throw new WebToolError('No se pudo contactar con GDELT (noticias).');
+  }
+  if (response.status === 429) throw new WebToolError('GDELT: demasiadas peticiones seguidas; se vuelve a intentar en la próxima consulta.');
+  if (!response.ok) throw new WebToolError(`GDELT respondió con HTTP ${response.status}.`);
+  const body = await response.text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    // GDELT answers plain text ("Timespan is too short", rate limit) with HTTP 200.
+    throw new WebToolError(`GDELT no devolvió noticias: ${clip(body, 120)}`);
+  }
+  const raw = record(parsed)?.articles;
+  const articles: NewsArticle[] = [];
+  const seen = new Set<string>();
+  for (const item of Array.isArray(raw) ? raw : []) {
+    const a = record(item);
+    if (a === null || typeof a.url !== 'string' || !/^https?:\/\//i.test(a.url) || seen.has(a.url)) continue;
+    seen.add(a.url);
+    articles.push({
+      title: typeof a.title === 'string' ? clip(a.title, 200) : a.url,
+      url: a.url,
+      domain: typeof a.domain === 'string' ? a.domain : '',
+      language: typeof a.language === 'string' ? a.language : '',
+      publishedAt: gdeltDate(a.seendate),
+    });
+    if (articles.length >= max) break;
+  }
+  return { query: q, articles, provider: 'gdelt', fetchedAt: new Date().toISOString() };
+}

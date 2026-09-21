@@ -16,7 +16,7 @@ import type { ToolRegistry } from '../registry/tools.ts';
 import type { MemoryScope, ToolRequest, ToolResult } from '../types.ts';
 import { CalculatorError, evaluate } from './calculator.ts';
 import { fetchPage, UnsafeUrlError, type PageFetcher } from './safe-fetch.ts';
-import { defaultWebFetch, tavilySearch, WebToolError, wikipedia, type WebFetch } from './web.ts';
+import { defaultWebFetch, gdeltNews, tavilySearch, WebToolError, wikipedia, type WebFetch } from './web.ts';
 
 export interface ToolContext {
   missionId: string;
@@ -37,7 +37,7 @@ export interface ToolExecutor {
 }
 
 /** The tools this executor implements. Everything else in the catalog is declared, not built. */
-export const IMPLEMENTED_TOOLS: ReadonlySet<string> = new Set(['memory.recall', 'math.calculator', 'research.wikipedia', 'web.search', 'web.fetch']);
+export const IMPLEMENTED_TOOLS: ReadonlySet<string> = new Set(['memory.recall', 'math.calculator', 'research.wikipedia', 'web.search', 'web.fetch', 'news.gdelt']);
 
 const MEMORY_SCOPES: readonly MemoryScope[] = ['user', 'project', 'mission', 'session'];
 const MAX_RECALL = 20;
@@ -132,6 +132,14 @@ export class LocalToolExecutor implements ToolExecutor {
                 )
               : output.results;
           return { ...base, ok: true, verified: false, error: null, output: { ...output, results } };
+        }
+        case 'news.gdelt': {
+          const { query, limit } = request.input;
+          if (typeof query !== 'string') {
+            return { ...base, ok: false, output: null, error: 'Falta la consulta.', verified: false, stage: 'execution', code: 'invalid_input' };
+          }
+          const output = await gdeltNews(this.web.fetch ?? defaultWebFetch, query, typeof limit === 'number' ? limit : 8, context.signal);
+          return { ...base, ok: true, verified: false, error: null, output: { ...output } };
         }
         case 'web.fetch': {
           const { url } = request.input;

@@ -37,6 +37,7 @@ export interface ServerConfig {
   webSearchApiKey: string | undefined;
   enableWikipedia: boolean;
   enableWebFetch: boolean;
+  enableNews: boolean;
   balanceProviders: boolean;
   /**
    * Credentials and models for OpenAI, Anthropic and Gemini. SERVER ONLY: this
@@ -149,8 +150,13 @@ function toolBudgets(env: NodeJS.ProcessEnv): Record<string, number> {
 }
 
 function prices(env: NodeJS.ProcessEnv): ServerConfig['madre']['prices'] {
+  // Free-tier hosts: assumed 0 USD unless the operator says otherwise, so a
+  // free key does not need a price entry to be usable. A paid plan must be
+  // declared in MADRE_PRICES_JSON.
+  const zero = { inputPer1kUsd: 0, outputPer1kUsd: 0 };
+  const defaults: ServerConfig['madre']['prices'] = { cerebras: zero, mistral: zero, cloudflare: zero };
   const raw = str(env, 'MADRE_PRICES_JSON');
-  if (raw === undefined) return {};
+  if (raw === undefined) return defaults;
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -158,7 +164,7 @@ function prices(env: NodeJS.ProcessEnv): ServerConfig['madre']['prices'] {
     throw new Error('MADRE_PRICES_JSON must be valid JSON, e.g. {"openai:gpt-x":{"inputPer1kUsd":0.001,"outputPer1kUsd":0.002}}.');
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('MADRE_PRICES_JSON must be a JSON object.');
-  const out: ServerConfig['madre']['prices'] = {};
+  const out: ServerConfig['madre']['prices'] = { ...defaults };
   for (const [key, value] of Object.entries(parsed)) {
     const v = value as { inputPer1kUsd?: unknown; outputPer1kUsd?: unknown };
     if (typeof v?.inputPer1kUsd !== 'number' || typeof v?.outputPer1kUsd !== 'number' || v.inputPer1kUsd < 0 || v.outputPer1kUsd < 0) {
@@ -201,7 +207,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   }
 
   const accessPassword = str(env, 'APP_PASSWORD');
-  const hasRealKey = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'OPENAI_COMPAT_API_KEY', 'TAVILY_API_KEY'].some(
+  const hasRealKey = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'OPENAI_COMPAT_API_KEY', 'CEREBRAS_API_KEY', 'MISTRAL_API_KEY', 'CLOUDFLARE_API_TOKEN', 'TAVILY_API_KEY'].some(
     (name) => str(env, name) !== undefined,
   );
   if (env.NODE_ENV === 'production' && hasRealKey && accessPassword === undefined && !bool(env, 'ALLOW_OPEN_ACCESS', false)) {
@@ -248,6 +254,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     ollamaBaseUrl: str(env, 'OLLAMA_BASE_URL'),
     enableWikipedia: bool(env, 'WIKIPEDIA_ENABLED', env.NODE_ENV === 'production'),
     enableWebFetch: bool(env, 'WEB_FETCH_ENABLED', env.NODE_ENV === 'production'),
+    enableNews: bool(env, 'NEWS_ENABLED', env.NODE_ENV === 'production'),
     balanceProviders: bool(env, 'MADRE_BALANCE_PROVIDERS', env.NODE_ENV === 'production'),
     webSearchApiKey: str(env, 'TAVILY_API_KEY') ?? str(env, 'SEARCH_API_KEY'),
     realProviders: realProviderOptionsFromEnv(env),

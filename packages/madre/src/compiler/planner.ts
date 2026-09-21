@@ -365,6 +365,9 @@ export class RulesPlanner implements Planner {
     if (capability.startsWith('research.') && agent.optionalTools.includes('web.fetch')) {
       urls.slice(0, 2).forEach((url, i) => add('web.fetch', 'Leer la página que el usuario indicó.', false, { url }, `#${i + 1}`));
     }
+    if (capability.startsWith('research.') && agent.optionalTools.includes('news.gdelt')) {
+      add('news.gdelt', 'Ver qué se publica ahora sobre el tema.', false, { query: topicText || keywords(query, 6) || query.slice(0, 80), limit: 8 });
+    }
     if (capability.startsWith('research.') && agent.optionalTools.includes('research.wikipedia')) {
       add('research.wikipedia', 'Contexto enciclopédico con fuente citable.', false, { title: query.slice(0, 150) });
     }

@@ -17,6 +17,11 @@ describe('sources section', () => {
     assert.equal(list[1]?.title, 'Página B');
   });
 
+  it('lists news articles as sources', () => {
+    const list = collectSources([{ toolResults: [ok('news.gdelt', { articles: [{ title: 'Noticia', url: 'https://n.example/1' }] })] }] as never);
+    assert.deepEqual(list.map((s) => s.url), ['https://n.example/1']);
+  });
+
   it('appends a section to the report and leaves it alone when there are no sources', () => {
     const text = withSources('# Informe', steps as never)!;
     assert.match(text, /^# Informe\n\n## Fuentes consultadas/);

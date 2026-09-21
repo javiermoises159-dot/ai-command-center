@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { tavilySearch, WebToolError, wikipedia, type WebFetch } from './web.ts';
+import { gdeltNews, tavilySearch, WebToolError, wikipedia, type WebFetch } from './web.ts';
 
 function reply(status: number, body: unknown): WebFetch {
   return async () => ({ ok: status >= 200 && status < 300, status, json: async () => body, text: async () => JSON.stringify(body) });
@@ -65,5 +65,37 @@ describe('tavilySearch', () => {
   it('explains a rejected key and an exhausted quota without echoing the key', async () => {
     await assert.rejects(tavilySearch(reply(401, {}), 'tvly-secret', 'q', 3), (e: Error) => /clave/.test(e.message) && !e.message.includes('tvly-secret'));
     await assert.rejects(tavilySearch(reply(429, {}), 'tvly-secret', 'q', 3), /cupo/);
+  });
+});
+
+describe('gdeltNews', () => {
+  const text = (status: number, body: string): WebFetch => async () => ({ ok: status < 300, status, json: async () => JSON.parse(body), text: async () => body });
+
+  it('returns titles, links and ISO dates, skipping duplicates and non-http links', async () => {
+    let seen = '';
+    const fetch: WebFetch = async (url) => {
+      seen = url;
+      return text(200, JSON.stringify({ articles: [
+        { url: 'https://a.example/1', title: 'Uno', domain: 'a.example', language: 'Italian', seendate: '20260921T103000Z' },
+        { url: 'https://a.example/1', title: 'Repetida' },
+        { url: 'javascript:alert(1)', title: 'Mala' },
+      ] }))(url);
+    };
+    const out = await gdeltNews(fetch, 'Quiero abrir una tienda de galletas en Torino', 5);
+    assert.match(seen, /^https:\/\/api\.gdeltproject\.org\/api\/v2\/doc\/doc\?/);
+    assert.match(seen, /mode=artlist/);
+    assert.equal(out.articles.length, 1);
+    assert.equal(out.articles[0]?.publishedAt, '2026-09-21T10:30:00Z');
+  });
+
+  it('turns GDELT plain-text errors and rate limits into a clear failure', async () => {
+    await assert.rejects(gdeltNews(text(200, 'Timespan is too short.'), 'galletas artesanales', 5), /GDELT no devolvió noticias/);
+    await assert.rejects(gdeltNews(text(429, 'slow down'), 'galletas artesanales', 5), /demasiadas peticiones/);
+  });
+
+  it('strips search operators from the query', async () => {
+    let seen = '';
+    await gdeltNews(async (url) => { seen = url; return text(200, '{"articles":[]}')(url); }, 'galletas OR "sourcelang:italian" (x)', 5);
+    assert.ok(!decodeURIComponent(seen).includes('"'));
   });
 });

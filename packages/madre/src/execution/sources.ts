@@ -39,6 +39,11 @@ export function collectSources(steps: readonly Pick<StepState, 'toolResults'>[])
           const r = asRecord(item);
           if (r !== null) add(found, r.url, r.title);
         }
+      } else if (result.toolId === 'news.gdelt' && Array.isArray(output.articles)) {
+        for (const item of output.articles) {
+          const r = asRecord(item);
+          if (r !== null) add(found, r.url, r.title);
+        }
       } else if (result.toolId === 'web.fetch' || result.toolId === 'research.wikipedia') {
         add(found, output.url, output.title);
       }

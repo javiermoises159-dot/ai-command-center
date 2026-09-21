@@ -89,6 +89,33 @@ const META: Record<string, ProviderMeta> = {
     notConnected: 'Sin configurar: faltan OPENAI_COMPAT_BASE_URL, OPENAI_COMPAT_API_KEY y OPENAI_COMPAT_MODEL. No se sustituye por una simulación.',
     connected: 'Configurado (OpenRouter, Groq, Cerebras, Mistral…). Las llamadas salen del servidor; la clave nunca llega al navegador.',
   },
+  cerebras: {
+    label: 'Cerebras',
+    tier: 'external',
+    privacy: 'third_party',
+    requires: 'CEREBRAS_API_KEY y CEREBRAS_MODEL',
+    whenAvailable: 'CONNECTED',
+    notConnected: 'Sin configurar: faltan CEREBRAS_API_KEY y CEREBRAS_MODEL. No se sustituye por una simulación.',
+    connected: 'Configurado (plan gratuito de Cerebras). Las llamadas salen del servidor; la clave nunca llega al navegador.',
+  },
+  mistral: {
+    label: 'Mistral',
+    tier: 'external',
+    privacy: 'third_party',
+    requires: 'MISTRAL_API_KEY y MISTRAL_MODEL',
+    whenAvailable: 'CONNECTED',
+    notConnected: 'Sin configurar: faltan MISTRAL_API_KEY y MISTRAL_MODEL. No se sustituye por una simulación.',
+    connected: 'Configurado (plan gratuito de Mistral). Las llamadas salen del servidor; la clave nunca llega al navegador.',
+  },
+  cloudflare: {
+    label: 'Cloudflare Workers AI',
+    tier: 'external',
+    privacy: 'third_party',
+    requires: 'CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID y CLOUDFLARE_MODEL',
+    whenAvailable: 'CONNECTED',
+    notConnected: 'Sin configurar: faltan CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID y CLOUDFLARE_MODEL. No se sustituye por una simulación.',
+    connected: 'Configurado (cuota diaria gratuita de Cloudflare). Las llamadas salen del servidor; la clave nunca llega al navegador.',
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -143,6 +170,9 @@ const CAPABILITIES: Record<string, ModelCapabilities> = {
   anthropic: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: true },
   gemini: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: true, vision: true },
   'openai-compatible': { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
+  cerebras: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
+  mistral: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
+  cloudflare: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
 };
 
 function capabilitiesFor(providerId: string): ModelCapabilities {

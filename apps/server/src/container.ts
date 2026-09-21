@@ -68,11 +68,14 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     anthropic: config.realProviders.anthropic,
     gemini: config.realProviders.gemini,
     openaiCompatible: config.realProviders.openaiCompatible,
+    cerebras: config.realProviders.cerebras,
+    mistral: config.realProviders.mistral,
+    cloudflare: config.realProviders.cloudflare,
   });
   // Say what is configured — the names only, never a key. A missing key is a
   // normal state, not an error: the provider is simply reported as unconfigured.
   for (const descriptor of providers.describe()) {
-    if (descriptor.id === 'openai' || descriptor.id === 'anthropic' || descriptor.id === 'gemini' || descriptor.id === 'openai-compatible') {
+    if (descriptor.id === 'openai' || descriptor.id === 'anthropic' || descriptor.id === 'gemini' || descriptor.id === 'openai-compatible' || descriptor.id === 'cerebras' || descriptor.id === 'mistral' || descriptor.id === 'cloudflare') {
       if (descriptor.configured === true) logger.info('real provider configured', { provider: descriptor.id, models: descriptor.models.map((m) => m.id) });
       else logger.info('real provider not configured', { provider: descriptor.id, requires: descriptor.requires });
     }
@@ -95,6 +98,7 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     webSearchApiKey: config.webSearchApiKey,
     enableWikipedia: config.enableWikipedia,
     enableWebFetch: config.enableWebFetch,
+    enableNews: config.enableNews,
     balanceProviders: config.balanceProviders,
     disabledProviders: config.disabledProviders,
     engine: {

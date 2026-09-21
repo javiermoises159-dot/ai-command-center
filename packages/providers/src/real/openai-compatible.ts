@@ -15,7 +15,7 @@
  * instead of failing — hosts are inconsistent there, and nothing is guessed.
  */
 
-import type { ProviderConfiguration, ProviderResult, ProviderTask } from '@acc/domain';
+import type { ProviderConfiguration, ProviderId, ProviderResult, ProviderTask } from '@acc/domain';
 
 import { count, invalidResponse, type FailureContext, type HttpResponse } from './http.ts';
 import { dig, RealProvider, type BuiltRequest, type ParsedCompletion, type RealProviderOptions } from './real-provider.ts';
@@ -26,11 +26,13 @@ export interface OpenAICompatibleOptions extends RealProviderOptions {
 }
 
 export class OpenAICompatibleProvider extends RealProvider {
-  readonly id = 'openai-compatible' as const;
+  readonly id: ProviderId = 'openai-compatible';
   readonly label: string;
-  readonly keyVariable = 'OPENAI_COMPAT_API_KEY';
-  readonly modelVariable = 'OPENAI_COMPAT_MODEL';
-  protected readonly defaultBaseUrl = '';
+  readonly keyVariable: string = 'OPENAI_COMPAT_API_KEY';
+  readonly modelVariable: string = 'OPENAI_COMPAT_MODEL';
+  /** Variable that must hold the host URL when there is no built-in one (for messages). */
+  protected readonly baseUrlVariable: string = 'OPENAI_COMPAT_BASE_URL';
+  protected readonly defaultBaseUrl: string = '';
   private readonly hasBaseUrl: boolean;
 
   constructor(options: OpenAICompatibleOptions = {}) {
@@ -48,8 +50,8 @@ export class OpenAICompatibleProvider extends RealProvider {
     const rest = base.requires.filter((r) => r !== this.modelVariable);
     return {
       configured: false,
-      reason: `Sin configurar: falta OPENAI_COMPAT_BASE_URL${this.apiKey === null ? `, ${this.keyVariable}` : ''} y ${this.modelVariable}. No se sustituye por una simulación.`,
-      requires: ['OPENAI_COMPAT_BASE_URL', ...rest, this.modelVariable],
+      reason: `Sin configurar: falta ${this.baseUrlVariable}${this.apiKey === null ? `, ${this.keyVariable}` : ''} y ${this.modelVariable}. No se sustituye por una simulación.`,
+      requires: [this.baseUrlVariable, ...rest, this.modelVariable],
     };
   }
 

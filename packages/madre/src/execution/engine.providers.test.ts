@@ -195,7 +195,7 @@ describe('engine over real provider adapters', () => {
     assert.ok(selected.data.excluded.some((e: any) => e.provider === 'anthropic' && e.errorCode === 'PROVIDER_UNCONFIGURED'));
     // Unconfigured providers are reported once per run, not once per step.
     const unconfigured = events(r, 'provider.unconfigured');
-    assert.deepEqual(unconfigured.map((e) => e.data.provider).sort(), ['anthropic', 'gemini', 'ollama', 'openai-compatible'].sort());
+    assert.deepEqual(unconfigured.map((e) => e.data.provider).sort(), ['anthropic', 'cerebras', 'cloudflare', 'gemini', 'mistral', 'ollama', 'openai-compatible'].sort());
     // A request is started before it succeeds.
     for (const s of r.trace.steps.filter((x) => x.providerCalls.length > 0)) {
       for (const c of s.providerCalls) assert.ok(c.startedAt <= (c.endedAt ?? c.startedAt));
@@ -263,7 +263,7 @@ describe('engine over real provider adapters', () => {
       assert.ok(r.trace.steps.filter((s) => s.provider !== null).every((s) => s.source === 'mock' && s.simulated === true));
       assert.ok(r.costs.every((c) => c.source === 'mock' && c.estimatedUsd === 0));
       // The real providers are reported as unconfigured, not as failed.
-      assert.equal(events(r, 'provider.unconfigured').length, 5);
+      assert.equal(events(r, 'provider.unconfigured').length, 8);
       assert.equal(events(r, 'provider.request_failed').length, 0);
     });
 

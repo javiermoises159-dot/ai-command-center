@@ -9,6 +9,9 @@
  *   Anthropic   ANTHROPIC_API_KEY   ANTHROPIC_MODEL   ANTHROPIC_API_BASE_URL   ANTHROPIC_MAX_TOKENS
  *   Compatible  OPENAI_COMPAT_API_KEY  OPENAI_COMPAT_MODEL  OPENAI_COMPAT_BASE_URL (required)  OPENAI_COMPAT_LABEL
  *   Gemini      GOOGLE_API_KEY      GEMINI_MODEL      GEMINI_API_BASE_URL
+ *   Cerebras    CEREBRAS_API_KEY    CEREBRAS_MODEL
+ *   Mistral     MISTRAL_API_KEY     MISTRAL_MODEL
+ *   Cloudflare  CLOUDFLARE_API_TOKEN  CLOUDFLARE_ACCOUNT_ID  CLOUDFLARE_MODEL
  *               (GEMINI_API_KEY is accepted as an alias: it is the name earlier
  *                versions of `.env.example` used)
  *
@@ -17,6 +20,7 @@
  * for the operator would mean spending their money on a model they never chose.
  */
 
+import type { HostedCompatOptions } from './hosted-compat.ts';
 import type { OpenAICompatibleOptions } from './openai-compatible.ts';
 import type { RealProviderOptions } from './real-provider.ts';
 
@@ -25,6 +29,9 @@ export interface RealProviderEnv {
   anthropic: RealProviderOptions;
   gemini: RealProviderOptions;
   openaiCompatible: OpenAICompatibleOptions;
+  cerebras: HostedCompatOptions;
+  mistral: HostedCompatOptions;
+  cloudflare: HostedCompatOptions;
 }
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -69,6 +76,13 @@ export function realProviderOptionsFromEnv(env: Env): RealProviderEnv {
       models: list(env, 'OPENAI_COMPAT_MODEL'),
       baseUrl: value(env, 'OPENAI_COMPAT_BASE_URL'),
       label: value(env, 'OPENAI_COMPAT_LABEL'),
+    },
+    cerebras: { apiKey: value(env, 'CEREBRAS_API_KEY'), models: list(env, 'CEREBRAS_MODEL'), baseUrl: value(env, 'CEREBRAS_API_BASE_URL') },
+    mistral: { apiKey: value(env, 'MISTRAL_API_KEY'), models: list(env, 'MISTRAL_MODEL'), baseUrl: value(env, 'MISTRAL_API_BASE_URL') },
+    cloudflare: {
+      apiKey: value(env, 'CLOUDFLARE_API_TOKEN'),
+      models: list(env, 'CLOUDFLARE_MODEL'),
+      accountId: value(env, 'CLOUDFLARE_ACCOUNT_ID'),
     },
   };
 }
