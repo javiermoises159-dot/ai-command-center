@@ -9,7 +9,7 @@
 
 import type { AgentId } from './types.ts';
 
-export type ProviderId = 'mock' | 'ollama' | 'openai' | 'anthropic' | 'gemini' | 'openai-compatible' | 'cerebras' | 'mistral' | 'cloudflare' | 'nvidia';
+export type ProviderId = 'mock' | 'ollama' | 'openai' | 'anthropic' | 'gemini' | 'openai-compatible' | 'cerebras' | 'mistral' | 'cloudflare' | 'nvidia' | 'openrouter' | 'sambanova';
 
 /**
  * `available`    — implemented, configured and usable right now.

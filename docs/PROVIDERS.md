@@ -249,3 +249,10 @@ personalizado» y **no** cuenta como E2E real.
 - El circuito no está compartido entre instancias y el fallo permanente dura hasta reiniciar.
 - La estimación previa usa tamaños fijos (1500/700 tokens); la sonda del circuito es «la siguiente llamada», y con concurrencia puede haber más de una a prueba.
 - Sin streaming, sin llamadas a herramientas nativas de los proveedores (los proveedores no llaman a herramientas por diseño).
+
+## Backups when a free quota runs out
+
+- **Text:** every configured provider is a backup for the others (Gemini, Groq, Cerebras, Mistral, NVIDIA, Cloudflare, and now OpenRouter with `OPENROUTER_API_KEY` + `OPENROUTER_MODEL` and SambaNova with `SAMBANOVA_API_KEY` + `SAMBANOVA_MODEL`). The router skips one that fails and tries the next.
+- **Pictures** (`content/media.ts`, `chainImages`): Cloudflare, then Gemini's picture model (same key), then Hugging Face (`HF_TOKEN`), then Pollinations (no key). A service that reports its quota as spent (429) is skipped for 30 minutes.
+- **Voice:** Gemini, then Cloudflare for English and French.
+- **Transcription:** Cloudflare Whisper, then Groq Whisper (`GROQ_API_KEY`).

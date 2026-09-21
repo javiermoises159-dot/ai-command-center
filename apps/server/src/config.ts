@@ -43,6 +43,12 @@ export interface ServerConfig {
   /** Gemini text-to-speech for voice-overs (reuses the Gemini key). */
   geminiApiKey: string | undefined;
   geminiTtsModel: string | undefined;
+  geminiImageModel: string | undefined;
+  huggingFaceToken: string | undefined;
+  /** Key for Groq's hosted Whisper (backup transcription). */
+  groqApiKey: string | undefined;
+  /** Pollinations pictures as a keyless backup. On unless IMAGE_FALLBACK_FREE=off. */
+  freeImageFallback: boolean;
   /** "owner/repository" where finished websites are published (GitHub Pages). */
   githubSitesRepo: string | undefined;
   enableWikipedia: boolean;
@@ -164,7 +170,7 @@ function prices(env: NodeJS.ProcessEnv): ServerConfig['madre']['prices'] {
   // free key does not need a price entry to be usable. A paid plan must be
   // declared in MADRE_PRICES_JSON.
   const zero = { inputPer1kUsd: 0, outputPer1kUsd: 0 };
-  const defaults: ServerConfig['madre']['prices'] = { cerebras: zero, mistral: zero, cloudflare: zero, nvidia: zero };
+  const defaults: ServerConfig['madre']['prices'] = { cerebras: zero, mistral: zero, cloudflare: zero, nvidia: zero, openrouter: zero, sambanova: zero };
   const raw = str(env, 'MADRE_PRICES_JSON');
   if (raw === undefined) return defaults;
   let parsed: unknown;
@@ -217,7 +223,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   }
 
   const accessPassword = str(env, 'APP_PASSWORD');
-  const hasRealKey = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'OPENAI_COMPAT_API_KEY', 'CEREBRAS_API_KEY', 'MISTRAL_API_KEY', 'CLOUDFLARE_API_TOKEN', 'NVIDIA_API_KEY', 'TAVILY_API_KEY', 'GITHUB_TOKEN'].some(
+  const hasRealKey = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY', 'OPENAI_COMPAT_API_KEY', 'CEREBRAS_API_KEY', 'MISTRAL_API_KEY', 'CLOUDFLARE_API_TOKEN', 'NVIDIA_API_KEY', 'OPENROUTER_API_KEY', 'SAMBANOVA_API_KEY', 'GROQ_API_KEY', 'HF_TOKEN', 'TAVILY_API_KEY', 'GITHUB_TOKEN'].some(
     (name) => str(env, name) !== undefined,
   );
   if (env.NODE_ENV === 'production' && hasRealKey && accessPassword === undefined && !bool(env, 'ALLOW_OPEN_ACCESS', false)) {
@@ -272,6 +278,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     cloudflareApiToken: str(env, 'CLOUDFLARE_API_TOKEN'),
     geminiApiKey: str(env, 'GOOGLE_API_KEY') ?? str(env, 'GEMINI_API_KEY'),
     geminiTtsModel: str(env, 'GEMINI_TTS_MODEL'),
+    geminiImageModel: str(env, 'GEMINI_IMAGE_MODEL'),
+    huggingFaceToken: str(env, 'HF_TOKEN') ?? str(env, 'HUGGINGFACE_API_KEY'),
+    groqApiKey: str(env, 'GROQ_API_KEY') ?? (str(env, 'OPENAI_COMPAT_BASE_URL')?.includes('groq.com') === true ? str(env, 'OPENAI_COMPAT_API_KEY') : undefined),
+    freeImageFallback: str(env, 'IMAGE_FALLBACK_FREE')?.toLowerCase() !== 'off',
     githubSitesRepo: str(env, 'GITHUB_SITES_REPO'),
     realProviders: realProviderOptionsFromEnv(env),
     disabledProviders: (str(env, 'MADRE_DISABLED_PROVIDERS') ?? '')

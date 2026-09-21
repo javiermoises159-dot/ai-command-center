@@ -107,6 +107,24 @@ const META: Record<string, ProviderMeta> = {
     notConnected: 'Sin configurar: faltan MISTRAL_API_KEY y MISTRAL_MODEL. No se sustituye por una simulación.',
     connected: 'Configurado (plan gratuito de Mistral). Las llamadas salen del servidor; la clave nunca llega al navegador.',
   },
+  openrouter: {
+    label: 'OpenRouter',
+    tier: 'external',
+    privacy: 'third_party',
+    requires: 'OPENROUTER_API_KEY y OPENROUTER_MODEL',
+    whenAvailable: 'CONNECTED',
+    notConnected: 'Sin configurar: faltan OPENROUTER_API_KEY y OPENROUTER_MODEL. No se sustituye por una simulación.',
+    connected: 'Configurado (modelos gratuitos de OpenRouter). Las llamadas salen del servidor; la clave nunca llega al navegador.',
+  },
+  sambanova: {
+    label: 'SambaNova',
+    tier: 'external',
+    privacy: 'third_party',
+    requires: 'SAMBANOVA_API_KEY y SAMBANOVA_MODEL',
+    whenAvailable: 'CONNECTED',
+    notConnected: 'Sin configurar: faltan SAMBANOVA_API_KEY y SAMBANOVA_MODEL. No se sustituye por una simulación.',
+    connected: 'Configurado (plan gratuito de SambaNova). Las llamadas salen del servidor; la clave nunca llega al navegador.',
+  },
   cloudflare: {
     label: 'Cloudflare Workers AI',
     tier: 'external',
@@ -183,6 +201,8 @@ const CAPABILITIES: Record<string, ModelCapabilities> = {
   mistral: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
   nvidia: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
   cloudflare: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
+  openrouter: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
+  sambanova: { streaming: true, toolCalling: true, structuredOutput: true, embeddings: false, vision: false },
 };
 
 function capabilitiesFor(providerId: string): ModelCapabilities {

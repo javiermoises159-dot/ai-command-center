@@ -12,6 +12,8 @@
  *   Cerebras    CEREBRAS_API_KEY    CEREBRAS_MODEL
  *   Mistral     MISTRAL_API_KEY     MISTRAL_MODEL
  *   NVIDIA NIM  NVIDIA_API_KEY  NVIDIA_MODEL
+ *   OpenRouter  OPENROUTER_API_KEY  OPENROUTER_MODEL
+ *   SambaNova   SAMBANOVA_API_KEY   SAMBANOVA_MODEL
  *   Cloudflare  CLOUDFLARE_API_TOKEN  CLOUDFLARE_ACCOUNT_ID  CLOUDFLARE_MODEL
  *               (GEMINI_API_KEY is accepted as an alias: it is the name earlier
  *                versions of `.env.example` used)
@@ -34,6 +36,8 @@ export interface RealProviderEnv {
   mistral: HostedCompatOptions;
   cloudflare: HostedCompatOptions;
   nvidia: HostedCompatOptions;
+  openrouter: HostedCompatOptions;
+  sambanova: HostedCompatOptions;
 }
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -82,6 +86,8 @@ export function realProviderOptionsFromEnv(env: Env): RealProviderEnv {
     cerebras: { apiKey: value(env, 'CEREBRAS_API_KEY'), models: list(env, 'CEREBRAS_MODEL'), baseUrl: value(env, 'CEREBRAS_API_BASE_URL') },
     mistral: { apiKey: value(env, 'MISTRAL_API_KEY'), models: list(env, 'MISTRAL_MODEL'), baseUrl: value(env, 'MISTRAL_API_BASE_URL') },
     nvidia: { apiKey: value(env, 'NVIDIA_API_KEY'), models: list(env, 'NVIDIA_MODEL'), baseUrl: value(env, 'NVIDIA_API_BASE_URL') },
+    openrouter: { apiKey: value(env, 'OPENROUTER_API_KEY'), models: list(env, 'OPENROUTER_MODEL'), baseUrl: value(env, 'OPENROUTER_API_BASE_URL') },
+    sambanova: { apiKey: value(env, 'SAMBANOVA_API_KEY'), models: list(env, 'SAMBANOVA_MODEL'), baseUrl: value(env, 'SAMBANOVA_API_BASE_URL') },
     cloudflare: {
       apiKey: value(env, 'CLOUDFLARE_API_TOKEN'),
       models: list(env, 'CLOUDFLARE_MODEL'),

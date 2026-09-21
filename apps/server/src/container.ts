@@ -18,12 +18,12 @@ import { createRepositories } from '@acc/repositories';
 
 import type { ServerConfig } from './config.ts';
 import { GitHubPagesPublisher, parseRepo, type SitePublisher } from './publish/github-pages.ts';
-import { buildMedia, CloudflareMedia, GeminiVoice, type MediaGenerator } from './content/media.ts';
+import { buildMedia, chainTranscribers, CloudflareMedia, GeminiImage, GeminiVoice, GroqWhisper, HuggingFaceImage, PollinationsImage, type ImageStep, type MediaGenerator } from './content/media.ts';
 import { createClipMaker, createEditPlanner, type ClipMaker } from './content/clips.ts';
 import { createStudioBriefer, type StudioBriefer } from './content/studio.ts';
 import { createPieceDrafter, type PieceDrafter } from './content/draft.ts';
 import { createReelMaker, ffmpegAvailable, type ReelMaker } from './content/video.ts';
-import { MemoryContentStore, type ContentStore } from './content/store.ts';
+import { MemoryContentStore, type ContentStore, type Media } from './content/store.ts';
 import { createLogger } from './logger.ts';
 
 export interface Container {
@@ -83,11 +83,13 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     mistral: config.realProviders.mistral,
     cloudflare: config.realProviders.cloudflare,
     nvidia: config.realProviders.nvidia,
+    openrouter: config.realProviders.openrouter,
+    sambanova: config.realProviders.sambanova,
   });
   // Say what is configured — the names only, never a key. A missing key is a
   // normal state, not an error: the provider is simply reported as unconfigured.
   for (const descriptor of providers.describe()) {
-    if (descriptor.id === 'openai' || descriptor.id === 'anthropic' || descriptor.id === 'gemini' || descriptor.id === 'openai-compatible' || descriptor.id === 'cerebras' || descriptor.id === 'mistral' || descriptor.id === 'cloudflare' || descriptor.id === 'nvidia') {
+    if (descriptor.id === 'openai' || descriptor.id === 'anthropic' || descriptor.id === 'gemini' || descriptor.id === 'openai-compatible' || descriptor.id === 'cerebras' || descriptor.id === 'mistral' || descriptor.id === 'cloudflare' || descriptor.id === 'nvidia' || descriptor.id === 'openrouter' || descriptor.id === 'sambanova') {
       if (descriptor.configured === true) logger.info('real provider configured', { provider: descriptor.id, models: descriptor.models.map((m) => m.id) });
       else logger.info('real provider not configured', { provider: descriptor.id, requires: descriptor.requires });
     }
@@ -102,14 +104,16 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
   // What the creative studio can really do with this server's keys and tools.
   const hasRealAi = providers.availableIds().some((id) => id !== 'mock');
   const hasCloudflare = config.cloudflareAccountId !== undefined && config.cloudflareApiToken !== undefined;
+  const hasBackupImages = config.geminiApiKey !== undefined || config.huggingFaceToken !== undefined || config.freeImageFallback;
   const hasVoice = config.geminiApiKey !== undefined || hasCloudflare;
   const hasFfmpeg = ffmpegAvailable();
   const studio = [
     ...(hasRealAi ? ['script'] : []),
-    ...(hasCloudflare ? ['image', 'transcribe'] : []),
+    ...(hasCloudflare || hasBackupImages ? ['image'] : []),
+    ...(hasCloudflare || config.groqApiKey !== undefined ? ['transcribe'] : []),
     ...(hasVoice ? ['voice'] : []),
     ...(hasFfmpeg ? ['edit'] : []),
-    ...(hasFfmpeg && hasCloudflare && hasVoice ? ['reel'] : []),
+    ...(hasFfmpeg && (hasCloudflare || hasBackupImages) && hasVoice ? ['reel'] : []),
   ];
 
   const madre = createMadre({
@@ -192,7 +196,18 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
   }
   const cloudflare = config.cloudflareAccountId !== undefined && config.cloudflareApiToken !== undefined ? new CloudflareMedia(config.cloudflareAccountId, config.cloudflareApiToken) : undefined;
   const gemini = config.geminiApiKey !== undefined ? new GeminiVoice(config.geminiApiKey, config.geminiTtsModel) : undefined;
-  const media = buildMedia({ cloudflare, gemini });
+  // Backups when a free quota runs out, in order: Gemini's picture model (same key as voice),
+  // Hugging Face (free token) and Pollinations (no key).
+  const extraImages: ImageStep[] = [
+    ...(config.geminiApiKey !== undefined ? [{ name: 'Gemini', run: (p: string) => new GeminiImage(config.geminiApiKey!, config.geminiImageModel).image(p) }] : []),
+    ...(config.huggingFaceToken !== undefined ? [{ name: 'Hugging Face', run: (p: string) => new HuggingFaceImage(config.huggingFaceToken!).image(p) }] : []),
+    ...(config.freeImageFallback ? [{ name: 'Pollinations', run: (p: string) => new PollinationsImage().image(p) }] : []),
+  ];
+  const media = buildMedia({ cloudflare, gemini, extraImages });
+  const transcribe = chainTranscribers([
+    ...(cloudflare !== undefined ? [{ name: 'Cloudflare', run: (a: Media) => cloudflare.transcribe(a) }] : []),
+    ...(config.groqApiKey !== undefined ? [{ name: 'Groq', run: (a: Media) => new GroqWhisper(config.groqApiKey!).transcribe(a) }] : []),
+  ]);
   const video = ffmpegAvailable() ? createReelMaker() : undefined;
   if (video === undefined) logger.warn('ffmpeg not found: video creation is off');
   if (cloudflare === undefined && (config.cloudflareAccountId !== undefined || config.cloudflareApiToken !== undefined)) {
@@ -210,7 +225,7 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     missions,
     madre,
     sitePublisher,
-    content: { store: contentStore, media, video, drafter: createPieceDrafter(providers), studio: createStudioBriefer(providers), clips: ffmpegAvailable() ? createClipMaker({ plan: createEditPlanner(providers), transcribe: cloudflare === undefined ? undefined : (a) => cloudflare.transcribe(a) }) : undefined },
+    content: { store: contentStore, media, video, drafter: createPieceDrafter(providers), studio: createStudioBriefer(providers), clips: ffmpegAvailable() ? createClipMaker({ plan: createEditPlanner(providers), transcribe }) : undefined },
     async shutdown() {
       logger.info('draining job queue');
       await queue.stop(15_000);

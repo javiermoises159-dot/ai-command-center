@@ -6,6 +6,8 @@
  *   Cerebras    CEREBRAS_API_KEY        CEREBRAS_MODEL
  *   Mistral     MISTRAL_API_KEY         MISTRAL_MODEL
  *   NVIDIA NIM  NVIDIA_API_KEY          NVIDIA_MODEL
+ *   OpenRouter  OPENROUTER_API_KEY      OPENROUTER_MODEL
+ *   SambaNova   SAMBANOVA_API_KEY       SAMBANOVA_MODEL
  *   Cloudflare  CLOUDFLARE_API_TOKEN    CLOUDFLARE_MODEL    CLOUDFLARE_ACCOUNT_ID
  *
  * Base URLs are the vendors' documented ones and are built in — unlike the
@@ -63,6 +65,25 @@ export const CLOUDFLARE_PRESET: HostPreset = {
   baseUrl: null,
 };
 
+ /** OpenRouter: one key, many models, several of them free (ids ending in ":free"). */
+export const OPENROUTER_PRESET: HostPreset = {
+  id: 'openrouter',
+  label: 'OpenRouter',
+  keyVariable: 'OPENROUTER_API_KEY',
+  modelVariable: 'OPENROUTER_MODEL',
+  baseUrlVariable: 'OPENROUTER_API_BASE_URL',
+  baseUrl: 'https://openrouter.ai/api/v1',
+};
+
+export const SAMBANOVA_PRESET: HostPreset = {
+  id: 'sambanova',
+  label: 'SambaNova',
+  keyVariable: 'SAMBANOVA_API_KEY',
+  modelVariable: 'SAMBANOVA_MODEL',
+  baseUrlVariable: 'SAMBANOVA_API_BASE_URL',
+  baseUrl: 'https://api.sambanova.ai/v1',
+};
+
 export interface HostedCompatOptions extends OpenAICompatibleOptions {
   /** Cloudflare only. */
   accountId?: string | undefined;
@@ -89,4 +110,6 @@ export class HostedCompatProvider extends OpenAICompatibleProvider {
 export const createCerebras = (o?: HostedCompatOptions): HostedCompatProvider => new HostedCompatProvider(CEREBRAS_PRESET, o);
 export const createMistral = (o?: HostedCompatOptions): HostedCompatProvider => new HostedCompatProvider(MISTRAL_PRESET, o);
 export const createCloudflare = (o?: HostedCompatOptions): HostedCompatProvider => new HostedCompatProvider(CLOUDFLARE_PRESET, o);
+export const createOpenRouter = (o?: HostedCompatOptions): HostedCompatProvider => new HostedCompatProvider(OPENROUTER_PRESET, o);
+export const createSambaNova = (o?: HostedCompatOptions): HostedCompatProvider => new HostedCompatProvider(SAMBANOVA_PRESET, o);
 export const createNvidia = (o?: HostedCompatOptions): HostedCompatProvider => new HostedCompatProvider(NVIDIA_PRESET, o);
