@@ -262,6 +262,11 @@ for (const vendor of VENDORS) {
         assert.equal(error.countsAgainstCircuit, false);
       });
 
+      it('a 402 (payment required) is an exhausted quota, so the engine switches provider', async () => {
+        const error = await failureOf(vendor, { status: 402, body: { error: { message: 'payment required' } } });
+        assert.equal(error.providerCode, 'PROVIDER_QUOTA_EXHAUSTED');
+      });
+
       it('an exhausted balance reported as a 400 (Anthropic) is also permanent, not a bad request', async () => {
         const error = await failureOf(vendor, { status: 400, body: vendor.quotaBody });
         assert.equal(error.providerCode, 'PROVIDER_QUOTA_EXHAUSTED');

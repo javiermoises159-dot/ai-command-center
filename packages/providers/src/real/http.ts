@@ -134,7 +134,9 @@ export function failureFromResponse(
   }
   // Out of credit is not a rate limit and not a bad request: waiting does not fix
   // it and neither does changing the request. (Anthropic reports it as a 400.)
-  if ((status === 429 || status === 400) && /insufficient_quota|billing|exceeded your current quota|credit balance/.test(lower)) {
+  // 402 Payment Required: the host wants credit or an activated plan. Treat as
+  // exhausted quota so the engine moves on to another provider.
+  if (status === 402 || ((status === 429 || status === 400) && /insufficient_quota|billing|exceeded your current quota|credit balance/.test(lower))) {
     return new ProviderError('PROVIDER_QUOTA_EXHAUSTED', {
       ...base,
       detail: `${ctx.label} indica que la cuenta se ha quedado sin cuota o saldo. Revisa el plan y la facturación de la cuenta.`,
