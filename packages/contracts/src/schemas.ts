@@ -194,6 +194,8 @@ export const healthResponseSchema = z.object({
   status: z.literal('ok'),
   version: z.string(),
   provider: z.string().nullable(),
+  /** Labels of the real (non-simulated) AI providers that are connected. Missions use these; `provider` is only the default. */
+  realProviders: z.array(z.string()).optional(),
   time: z.string(),
 });
 

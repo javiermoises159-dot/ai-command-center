@@ -38,6 +38,8 @@ export const dashboard = {
       const names: Record<string, string> = { mock: 'Simulado' };
       return names[id] ?? id;
     },
+    /** Varias IAs reales conectadas: las misiones las usan, no el simulador. */
+    realProviders: (labels: readonly string[]): string => `IA real · ${labels.length} ${labels.length === 1 ? 'conectada' : 'conectadas'}`,
     simulatedNote:
       'Se está usando el proveedor simulado. El resultado tiene la estructura de uno real, pero no contiene ningún análisis.',
   },

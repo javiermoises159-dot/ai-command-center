@@ -136,6 +136,7 @@ function SystemStatusPanel({ activeMissions }: { activeMissions: number }) {
   const health = useHealth();
   const checking = health.data === null && health.error === null;
   const online = health.data !== null && health.error === null;
+  const realProviders = health.data?.health.realProviders ?? [];
 
   const rows: { id: string; label: string; value: string; tone?: 'ok' | 'bad' | 'warn' }[] = online
     ? [
@@ -144,8 +145,8 @@ function SystemStatusPanel({ activeMissions }: { activeMissions: number }) {
         {
           id: 'provider',
           label: t.dashboard.system.provider,
-          value: t.dashboard.system.providerName(health.data?.health.provider ?? null),
-          tone: health.data?.health.provider === 'mock' ? 'warn' : undefined,
+          value: realProviders.length > 0 ? t.dashboard.system.realProviders(realProviders) : t.dashboard.system.providerName(health.data?.health.provider ?? null),
+          tone: realProviders.length > 0 ? ('ok' as const) : health.data?.health.provider === 'mock' ? ('warn' as const) : undefined,
         },
         { id: 'active', label: t.dashboard.system.activeMissions, value: String(activeMissions) },
         { id: 'checked', label: t.dashboard.system.checked, value: relativeTime(health.data?.health.time ?? null) },
@@ -191,7 +192,7 @@ function SystemStatusPanel({ activeMissions }: { activeMissions: number }) {
             ))}
           </dl>
         )}
-        {online && health.data?.health.provider === 'mock' && (
+        {online && health.data?.health.provider === 'mock' && realProviders.length === 0 && (
           <p className="mt-3 border-t border-[var(--color-edge)] pt-3 text-[0.72rem] leading-relaxed text-[var(--color-ink-faint)]">
             {t.dashboard.system.simulatedNote}
           </p>

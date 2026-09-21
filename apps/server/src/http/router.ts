@@ -68,6 +68,7 @@ export function createRouter(deps: RouterDeps): Router {
           status: 'ok',
           version: deps.version,
           provider: deps.providers.defaultProviderId(),
+          realProviders: deps.providers.describe().filter((p) => p.availability === 'available' && p.id !== 'mock').map((p) => p.label),
           time: new Date().toISOString(),
         }),
     },
