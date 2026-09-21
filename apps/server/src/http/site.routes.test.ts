@@ -36,8 +36,8 @@ const okPublisher = (seen: { slug?: string; html?: string } = {}): SitePublisher
 
 describe('site publishing endpoints', () => {
   it('reports whether publishing is configured, without any secret', async () => {
-    assert.deepEqual((await setup([], undefined)('GET', '/api/site/status')).body, { publishing: { configured: false, repo: null } });
-    assert.deepEqual((await setup([], okPublisher())('GET', '/api/site/status')).body, { publishing: { configured: true, repo: 'o/r' } });
+    assert.deepEqual((await setup([], undefined)('GET', '/api/site/status')).body, { publishing: { configured: false, repo: null, hasToken: false, repoSetting: null } });
+    assert.deepEqual((await setup([], okPublisher())('GET', '/api/site/status')).body, { publishing: { configured: true, repo: 'o/r', hasToken: true, repoSetting: 'o/r' } });
   });
 
   it('publishes the page of the newest run that has one', async () => {

@@ -41,6 +41,8 @@ export interface RouterDeps {
   madre?: MadreService | undefined;
   /** Publishes finished websites. Absent when no GitHub token is configured. */
   sitePublisher?: SitePublisher | undefined;
+  /** What the server was given for publishing, so the screen can say what is missing. Never the token. */
+  siteSettings?: { hasToken: boolean; repo: string | null } | undefined;
   /** Reported by /api/health so a deploy can be identified. */
   version: string;
 }
@@ -142,7 +144,16 @@ export function createRouter(deps: RouterDeps): Router {
     {
       method: 'GET',
       pattern: '/api/site/status',
-      handler: async () => json(200, { publishing: { configured: deps.sitePublisher !== undefined, repo: deps.sitePublisher?.repo ?? null } }),
+      handler: async () =>
+        json(200, {
+          publishing: {
+            configured: deps.sitePublisher !== undefined,
+            repo: deps.sitePublisher?.repo ?? null,
+            hasToken: deps.siteSettings?.hasToken ?? deps.sitePublisher !== undefined,
+            // The repository setting as written (it is a name, not a secret), to spot a typo.
+            repoSetting: (deps.siteSettings?.repo ?? deps.sitePublisher?.repo ?? null)?.slice(0, 80) ?? null,
+          },
+        }),
     },
 
     {

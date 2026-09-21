@@ -6,6 +6,8 @@
 export interface SitePublishingStatus {
   configured: boolean;
   repo: string | null;
+  hasToken: boolean;
+  repoSetting: string | null;
 }
 
 export interface PublishedSite {

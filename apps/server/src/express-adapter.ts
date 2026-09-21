@@ -28,6 +28,7 @@ export function createExpressApp(container: Container): Express {
     providers: container.providers,
     madre: container.madre.service,
     sitePublisher: container.sitePublisher,
+    siteSettings: { hasToken: container.config.githubToken !== undefined, repo: container.config.githubSitesRepo ?? null },
     logger: container.logger,
     version: container.config.version,
   });

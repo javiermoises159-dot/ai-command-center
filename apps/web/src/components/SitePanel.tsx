@@ -24,6 +24,7 @@ export function SitePanel({ missionId, finalResult }: { missionId: string; final
   const downloadUrl = useMemo(() => (html === null ? null : htmlDownloadUrl(html)), [html]);
   useEffect(() => () => { if (downloadUrl !== null) URL.revokeObjectURL(downloadUrl); }, [downloadUrl]);
   const [status, setStatus] = useState<SitePublishingStatus | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +33,12 @@ export function SitePanel({ missionId, finalResult }: { missionId: string; final
 
   useEffect(() => {
     if (original === null) return;
-    getSiteStatus().then(setStatus).catch(() => setStatus({ configured: false, repo: null }));
+    getSiteStatus()
+      .then((s) => {
+        setStatus(s);
+        setStatusError(null);
+      })
+      .catch((e: unknown) => setStatusError(e instanceof Error ? e.message : 'No se pudo comprobar la publicación.'));
   }, [original]);
 
   if (html === null) return null;
@@ -128,9 +134,27 @@ export function SitePanel({ missionId, finalResult }: { missionId: string; final
           />
         )}
 
+        {statusError !== null && (
+          <Notice tone="mock" title="No pude comprobar si se puede publicar">
+            {statusError} Recarga la página. Mientras tanto, puedes descargar el archivo.
+          </Notice>
+        )}
+
         {status?.configured === false && ok && (
           <Notice tone="preview" title="Publicar gratis todavía no está activo">
-            Para publicar con un toque hace falta un repositorio público de GitHub y un token: guarda GITHUB_TOKEN y GITHUB_SITES_REPO en Render (los pasos están en el README, «Publicar páginas»). Mientras tanto, puedes descargar el archivo.
+            {!status.hasToken && 'El servidor no ve GITHUB_TOKEN. '}
+            {status.repoSetting === null
+              ? 'El servidor no ve GITHUB_SITES_REPO. '
+              : !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(status.repoSetting)
+                ? `GITHUB_SITES_REPO vale «${status.repoSetting}» y debe tener la forma usuario/repositorio. `
+                : ''}
+            Revisa esas variables en Render → Environment, guarda y espera a que ponga Live. Mientras tanto, puedes descargar el archivo.
+          </Notice>
+        )}
+
+        {status?.configured === true && !numberOk && ok && published === null && (
+          <Notice tone="live" title="Todo listo para publicar">
+            Escribe tu número de WhatsApp con prefijo (por ejemplo +39 351 5144815) y aparecerá el botón «Publicar en GitHub Pages».
           </Notice>
         )}
 
