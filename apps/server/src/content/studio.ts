@@ -10,7 +10,7 @@
 import { CONTENT_VOICE_GUIDE, PHOTO_STYLE_GUIDE, VISUAL_CRAFT_GUIDE } from '@acc/domain';
 import type { ProviderRegistry } from '@acc/providers';
 
-import { DraftError } from './draft.ts';
+import { DraftError, realProviderIds } from './draft.ts';
 import { ALL_VOICE_LANGS, type VoiceLang } from './media.ts';
 import { PLATFORMS, type Platform } from './store.ts';
 
@@ -80,7 +80,7 @@ export function createStudioBriefer(providers: ProviderRegistry): StudioBriefer 
   return async (request) => {
     const ask = request.trim().slice(0, 2000);
     if (ask === '') throw new DraftError('Escribe qué quieres crear.', 400);
-    const candidates = providers.availableIds().filter((id) => id !== 'mock');
+    const candidates = realProviderIds(providers);
     if (candidates.length === 0) throw new DraftError('No hay ninguna IA real conectada para preparar la creación.', 409);
 
     let lastError = 'ninguna IA devolvió algo utilizable';

@@ -536,3 +536,39 @@ describe('engine over real provider adapters', () => {
     });
   });
 });
+
+describe('pool mode over real adapters', () => {
+  function pooled(openai: Vendor, anthropic: Vendor) {
+    const registry = createProviderRegistry({
+      mock: { minLatencyMs: 0, maxLatencyMs: 0 },
+      openai: { apiKey: KEY, models: ['gpt-test'], fetch: openai.fetch },
+      anthropic: { apiKey: ANT_KEY, models: ['claude-test'], fetch: anthropic.fetch },
+    });
+    return createEngineHarness({
+      providerRegistry: registry,
+      prices: PRICES,
+      router: { poolMode: true },
+      engine: { parallelism: 1, poolAttempts: 8, quotaRestMs: 60_000, healing: { baseBackoffMs: 1, maxBackoffMs: 2, poolSwitch: true } },
+    });
+  }
+
+  it('finishes the whole mission when one provider is out of quota: the other covers, and both are used', async () => {
+    const dead = vendor({ status: 402, body: { error: { message: 'You exceeded your current quota' } } });
+    const alive = vendor();
+    const r = await run(pooled(dead, alive));
+    assert.equal(r.outcome.status, 'completed');
+    assert.ok(alive.seen.length > 0);
+    assert.equal(r.state.steps && Object.values(r.state.steps).some((s: any) => s.status === 'FAILED'), false);
+    // the dead one is asked about once, then rests instead of being retried for every step
+    assert.ok(dead.seen.length <= 2, `dead provider was called ${dead.seen.length} times`);
+    assert.ok(events(r, 'provider.excluded').some((e) => /descansa/.test(e.message ?? e.summary ?? JSON.stringify(e))));
+  });
+
+  it('shares the work between two healthy providers instead of leaving one idle', async () => {
+    const a = vendor();
+    const b = vendor();
+    const r = await run(pooled(a, b));
+    assert.equal(r.outcome.status, 'completed');
+    assert.ok(a.seen.length > 0 && b.seen.length > 0, `openai ${a.seen.length}, anthropic ${b.seen.length}`);
+  });
+});

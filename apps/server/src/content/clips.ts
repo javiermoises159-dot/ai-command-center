@@ -17,7 +17,7 @@ import { join } from 'node:path';
 
 import type { ProviderRegistry } from '@acc/providers';
 
-import { DraftError } from './draft.ts';
+import { DraftError, realProviderIds } from './draft.ts';
 import { MediaError } from './media.ts';
 import type { Media } from './store.ts';
 import { findFont } from './video.ts';
@@ -125,7 +125,7 @@ export function transcriptForPlanning(segments: readonly Segment[]): string {
 
 export function createEditPlanner(providers: ProviderRegistry): EditPlanner {
   return async (request, context) => {
-    const candidates = providers.availableIds().filter((id) => id !== 'mock');
+    const candidates = realProviderIds(providers);
     if (candidates.length === 0) throw new DraftError('No hay ninguna IA real conectada para decidir los cortes.', 409);
     const transcript = context.segments.length > 0 ? `Transcripción con tiempos:\n${transcriptForPlanning(context.segments)}` : 'No hay transcripción disponible.';
     let lastError = 'ninguna IA devolvió cortes utilizables';

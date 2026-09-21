@@ -120,6 +120,12 @@ export interface RouterOptions {
    * default so routing stays fully predictable unless the operator asks.
    */
   balanceTies?: boolean;
+  /**
+   * Pool mode: no provider has a special role. Every healthy real provider takes
+   * turns, whatever the step, and the quality floor no longer removes anyone, so
+   * the load spreads over all the free quotas instead of draining the "best" one.
+   */
+  poolMode?: boolean;
 }
 
 interface Candidate {
@@ -172,6 +178,9 @@ export class SmartRouter {
   private readonly circuit: CircuitBreaker;
   private readonly clock: Clock;
   private readonly balanceTies: boolean;
+  private readonly poolMode: boolean;
+  /** Advances on every routing decision; the pool rotates by it. */
+  private rotation = 0;
 
   constructor(
     private readonly agents: AgentRegistry,
@@ -184,6 +193,7 @@ export class SmartRouter {
     this.routing = resolveRoutingPolicy(options.policy);
     this.clock = options.clock ?? systemClock;
     this.balanceTies = options.balanceTies === true;
+    this.poolMode = options.poolMode === true;
     this.circuit = new CircuitBreaker(this.clock, {
       threshold: this.routing.circuitBreakerThreshold,
       cooldownMs: this.routing.circuitBreakerCooldownMs,
@@ -239,6 +249,16 @@ export class SmartRouter {
    */
   markProviderUnusable(providerId: string, detail: string): void {
     this.providers.markError(providerId, detail);
+  }
+
+  /**
+   * Take a provider out of rotation for a while and bring it back by itself: a free
+   * daily quota comes back tomorrow, so the provider must not stay out forever.
+   */
+  restProvider(providerId: string, detail: string, ms: number): void {
+    this.providers.markError(providerId, detail);
+    const timer = setTimeout(() => this.providers.clearError(providerId), ms);
+    timer.unref?.();
   }
 
   clearProviderFault(providerId: string): void {
@@ -560,8 +580,10 @@ export class SmartRouter {
     // Not a hard requirement: when nothing reaches the floor MADRE still runs
     // the step, but it says loudly that the result is under-powered.
     const meetsQuality = pool.filter((c) => c.model.quality >= needQuality);
-    let eligible = meetsQuality.length > 0 ? meetsQuality : pool;
-    if (meetsQuality.length === 0) {
+    let eligible = this.poolMode ? pool : meetsQuality.length > 0 ? meetsQuality : pool;
+    if (this.poolMode) {
+      // Pool mode: nobody is turned away for quality; the rotation shares the work.
+    } else if (meetsQuality.length === 0) {
       decision.warnings.push(
         `El mejor modelo disponible está valorado en ${Math.max(...pool.map((c) => c.model.quality))}/5 y este paso pide ${needQuality}/5. Toma el resultado con más cautela.`,
       );
@@ -618,7 +640,20 @@ export class SmartRouter {
     // Load balancing: providers that tie exactly are alternated from step to
     // step (stable for a given step), so one free quota is not drained alone.
     let balancedAmong = 0;
+    let pooled = false;
     const ranked = ((): Candidate[] => {
+      if (this.poolMode) {
+        const perProvider: Candidate[] = [];
+        for (const c of sorted) if (c.provider.tier !== 'mock' && !perProvider.some((l) => l.provider.id === c.provider.id)) perProvider.push(c);
+        const healthy = perProvider.filter((c) => !demoted(c));
+        if (healthy.length >= 2) {
+          const start = this.rotation++ % healthy.length;
+          const rotated = [...healthy.slice(start), ...healthy.slice(0, start)];
+          balancedAmong = healthy.length;
+          pooled = true;
+          return [...rotated, ...sorted.filter((c) => !rotated.includes(c))];
+        }
+      }
       if (!this.balanceTies || sorted.length < 2) return sorted;
       const first = sorted[0]!;
       const tied = (c: Candidate): boolean =>
@@ -739,7 +774,9 @@ export class SmartRouter {
       `Escalera de la política: ${policy.tierOrder.map(labelTier).join(' → ')}; el simulado siempre es el último recurso.`,
       `Se ha elegido ${provider.label} (${model.id}, valorado en ${model.quality}/5, ${labelTier(model.tier)}) por ser el nivel más bajo de la escalera que cumple lo que pide el paso.`,
     );
-    if (balancedAmong > 1) {
+    if (pooled) {
+      decision.rationale.push(`Modo conjunto: ${balancedAmong} proveedores trabajan por turnos, sin roles fijos; si uno falla o se queda sin cuota, el paso pasa al siguiente.`);
+    } else if (balancedAmong > 1) {
       decision.rationale.push(`Reparto de carga: ${balancedAmong} proveedores estaban igualados y se alterna entre ellos de un paso a otro.`);
     }
     const sameTier = ranked.filter((c) => tierRank(policy, c.model.tier) === tierRank(policy, chosen.model.tier));

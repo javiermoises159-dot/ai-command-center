@@ -11,7 +11,7 @@
 import { CONTENT_VOICE_GUIDE } from '@acc/domain';
 import type { ProviderRegistry } from '@acc/providers';
 
-import { DraftError } from './draft.ts';
+import { DraftError, realProviderIds } from './draft.ts';
 
 export type AssistantAction =
   | { type: 'create'; request: string }
@@ -91,7 +91,7 @@ export function createAssistantPlanner(providers: ProviderRegistry): AssistantPl
   return async (request, context) => {
     const ask = request.trim().slice(0, 2000);
     if (ask === '') throw new DraftError('Escribe qué quieres que haga.', 400);
-    const candidates = providers.availableIds().filter((id) => id !== 'mock');
+    const candidates = realProviderIds(providers);
     if (candidates.length === 0) throw new DraftError('No hay ninguna IA real conectada para entender la petición.', 409);
     let lastError = 'ninguna IA devolvió un plan utilizable';
     for (const id of candidates) {

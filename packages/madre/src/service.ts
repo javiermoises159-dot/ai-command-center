@@ -85,6 +85,8 @@ export interface MadreConfig {
   webSearchApiKey?: string | undefined;
   /** What the creative studio can really do today (script, image, voice, edit, transcribe, reel). Shown in the pipelines report. */
   studio?: readonly string[] | undefined;
+  /** Pool mode: all real providers work by turns, with no fixed roles, and a failing one hands the step to the next. */
+  poolMode?: boolean | undefined;
   /** Alternate between equally good providers, step by step. Off by default. */
   balanceProviders?: boolean | undefined;
   /** Turns on `news.gdelt` (public news API, no key). Off by default. */
@@ -370,7 +372,7 @@ export function createMadre(config: MadreConfig): Madre {
   const cost = new CostController(store, config.budget, config.prices);
   const memory = new MemoryService(store);
   const approvals = new ApprovalService(store);
-  const router = new SmartRouter(agents, catalog, tools, policy, cost, { clock, balanceTies: config.balanceProviders === true });
+  const router = new SmartRouter(agents, catalog, tools, policy, cost, { clock, balanceTies: config.balanceProviders === true, poolMode: config.poolMode === true });
   catalog.attachCircuit((providerId) => router.circuitState(providerId));
   const planner = config.planner ?? new RulesPlanner(agents, tools);
   const runner = config.runner ?? new ProviderStepRunner(config.providers);

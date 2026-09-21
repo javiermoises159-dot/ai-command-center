@@ -59,6 +59,8 @@ export interface ServerConfig {
   enableWebFetch: boolean;
   enableNews: boolean;
   balanceProviders: boolean;
+  /** All real AIs share the work by turns, with no roles, and cover for each other. */
+  poolMode: boolean;
   /**
    * Credentials and models for OpenAI, Anthropic and Gemini. SERVER ONLY: this
    * object holds API keys, so it is handed to the provider constructors and
@@ -276,6 +278,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     enableWebFetch: bool(env, 'WEB_FETCH_ENABLED', env.NODE_ENV === 'production'),
     enableNews: bool(env, 'NEWS_ENABLED', env.NODE_ENV === 'production'),
     balanceProviders: bool(env, 'MADRE_BALANCE_PROVIDERS', env.NODE_ENV === 'production'),
+    poolMode: bool(env, 'MADRE_POOL_MODE', true),
     webSearchApiKey: str(env, 'TAVILY_API_KEY') ?? str(env, 'SEARCH_API_KEY'),
     githubToken: str(env, 'GITHUB_TOKEN'),
     cloudflareAccountId: str(env, 'CLOUDFLARE_ACCOUNT_ID'),
@@ -297,7 +300,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
       .map((id) => id.trim().toLowerCase())
       .filter(Boolean),
     madre: {
-      parallelism: Math.max(1, int(env, 'MADRE_PARALLELISM', 2)),
+      parallelism: Math.max(1, int(env, 'MADRE_PARALLELISM', 3)),
       maxRevisionRounds: int(env, 'MADRE_MAX_REVISION_ROUNDS', 2),
       budget: {
         perMissionUsd: money(env, 'MADRE_BUDGET_PER_MISSION_USD'),

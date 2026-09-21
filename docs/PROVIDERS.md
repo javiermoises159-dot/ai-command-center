@@ -256,3 +256,7 @@ personalizado» y **no** cuenta como E2E real.
 - **Pictures** (`content/media.ts`, `chainImages`): Cloudflare, then Gemini's picture model (same key), then Hugging Face (`HF_TOKEN`), then Pollinations (no key). A service that reports its quota as spent (429) is skipped for 30 minutes.
 - **Voice:** Gemini, then Cloudflare for English and French.
 - **Transcription:** Cloudflare Whisper, then Groq Whisper (`GROQ_API_KEY`).
+
+## Pool mode (`MADRE_POOL_MODE`, on by default)
+
+No provider has a role. The router hands each step to the next healthy real provider in turn (the simulation is never in the rotation while a real one is healthy), so work is spread over every free quota and up to `MADRE_PARALLELISM` steps run at the same time on different providers. A rate limit, timeout, unusable answer or exhausted quota moves the step to the next provider at once; a step has up to 8 attempts, so it can try every provider. A provider whose free quota is spent rests for 3 hours and returns to the rotation on its own (it used to stay out until the server restarted). The content tools (studio, campaigns, clips, assistant) rotate their starting provider the same way.

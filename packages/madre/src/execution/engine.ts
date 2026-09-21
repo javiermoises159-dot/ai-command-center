@@ -80,6 +80,10 @@ export interface EngineOptions {
   maxRevisionRounds: number;
   agentTimeoutMs: number;
   healing: HealingOptions;
+  /** At least this many attempts per step (pool mode: enough to try every provider). */
+  poolAttempts?: number;
+  /** How long a provider whose free quota ran out stays out of rotation. 0 = until the server restarts. */
+  quotaRestMs?: number;
 }
 
 export const DEFAULT_ENGINE_OPTIONS: EngineOptions = {
@@ -715,7 +719,7 @@ export class MadreEngine {
     restore: (why: string) => boolean,
   ): Promise<boolean> {
     const agent = this.d.agents.require(step.agentId);
-    const max = Math.max(1, step.maxAttempts);
+    const max = Math.max(1, step.maxAttempts, this.options.poolAttempts ?? 0);
     let decision = initial;
     let correction: string | null = null;
     let attempt = 0;
@@ -1002,6 +1006,19 @@ export class MadreEngine {
 
   /** A configuration error (rejected key, no quota) will not fix itself: stop routing to the provider. */
   private async takeOutOfService(ctx: RunContext, step: MissionStep, providerId: string, error: ProviderError): Promise<void> {
+    const rest = this.options.quotaRestMs ?? 0;
+    if (error.providerCode === 'PROVIDER_QUOTA_EXHAUSTED' && rest > 0) {
+      // A free quota comes back: rest the provider and let it return by itself.
+      this.d.router.restProvider(providerId, error.publicMessage, rest);
+      await this.d.audit.record(
+        'router',
+        PROVIDER_EVENTS.excluded,
+        `${providerId} descansa ${Math.round(rest / 3_600_000)} h (cupo gratuito agotado) y vuelve solo a la rotación: ${error.publicMessage}`,
+        this.ids(ctx, step.id),
+        { provider: providerId, code: 'quota_rest', errorCode: error.providerCode, permanent: false },
+      );
+      return;
+    }
     this.d.router.markProviderUnusable(providerId, error.publicMessage);
     await this.d.audit.record(
       'router',

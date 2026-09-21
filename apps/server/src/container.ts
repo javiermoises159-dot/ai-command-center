@@ -132,11 +132,14 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     enableWebFetch: config.enableWebFetch,
     enableNews: config.enableNews,
     balanceProviders: config.balanceProviders,
+    poolMode: config.poolMode,
     disabledProviders: config.disabledProviders,
     engine: {
       parallelism: config.madre.parallelism,
       maxRevisionRounds: config.madre.maxRevisionRounds,
       agentTimeoutMs: config.agentTimeoutMs,
+      // Pool mode: enough attempts to try every provider, switching at once, and a spent free quota only rests for a while.
+      ...(config.poolMode ? { poolAttempts: 8, quotaRestMs: 3 * 3_600_000, healing: { baseBackoffMs: 500, maxBackoffMs: 8000, poolSwitch: true } } : { quotaRestMs: 3 * 3_600_000 }),
     },
   });
 

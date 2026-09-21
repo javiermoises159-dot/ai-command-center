@@ -89,6 +89,8 @@ export class CancelledError extends Error {
 export interface HealingOptions {
   baseBackoffMs: number;
   maxBackoffMs: number;
+  /** Pool mode: a failure that another provider might not have goes straight to the next provider. */
+  poolSwitch?: boolean;
 }
 
 export const DEFAULT_HEALING: HealingOptions = { baseBackoffMs: 500, maxBackoffMs: 8000 };
@@ -97,7 +99,16 @@ function backoff(attempt: number, options: HealingOptions, multiplier = 1): numb
   return Math.min(options.maxBackoffMs, options.baseBackoffMs * multiplier * 2 ** Math.max(0, attempt - 1));
 }
 
+const POOL_SWITCH_CLASSES: ReadonlySet<FailureClass> = new Set(['timeout', 'rate_limit', 'provider_unavailable', 'invalid_response', 'bad_output', 'unknown', 'quota', 'auth']);
+
 export function diagnose(error: unknown, attempt: number, options: HealingOptions = DEFAULT_HEALING): Diagnosis {
+  const d = diagnoseOnce(error, attempt, options);
+  if (options.poolSwitch !== true || !POOL_SWITCH_CLASSES.has(d.class)) return d;
+  // In the pool another provider is one step away: switch at once instead of waiting or retrying the same one.
+  return { ...d, action: 'switch_provider', retryable: true, switchProvider: true, backoffMs: Math.min(d.backoffMs, 300) };
+}
+
+function diagnoseOnce(error: unknown, attempt: number, options: HealingOptions): Diagnosis {
   const message = error instanceof Error ? error.message : String(error);
   // Classification reads the raw message; what a person is shown is the curated
   // one. A domain error's `message` is developer English, its `publicMessage` is Spanish.

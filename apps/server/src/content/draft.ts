@@ -20,6 +20,19 @@ export class DraftError extends Error {
   }
 }
 
+let turn = 0;
+
+/**
+ * The real (non-simulated) providers in a rotating order: every call starts with the
+ * next one, so no single free quota takes all the work, and the rest are the backups.
+ */
+export function realProviderIds(providers: ProviderRegistry): string[] {
+  const ids = providers.availableIds().filter((id) => id !== 'mock');
+  if (ids.length < 2) return ids;
+  const start = turn++ % ids.length;
+  return [...ids.slice(start), ...ids.slice(0, start)];
+}
+
 export type PieceDrafter = (report: string) => Promise<ContentInput[]>;
 
 const MAX_REPORT_CHARS = 12_000;
@@ -81,7 +94,7 @@ export function createPieceDrafter(providers: ProviderRegistry): PieceDrafter {
     if (body === '') throw new DraftError('La misión no tiene informe del que sacar piezas.', 400);
 
     // Real providers only: a simulated answer would put invented content in the calendar.
-    const candidates = providers.availableIds().filter((id) => id !== 'mock');
+    const candidates = realProviderIds(providers);
     if (candidates.length === 0) throw new DraftError('No hay ninguna IA real conectada para escribir las piezas.', 409);
 
     let lastError = 'ninguna IA devolvió piezas utilizables';
