@@ -18,7 +18,7 @@ import { createRepositories } from '@acc/repositories';
 
 import type { ServerConfig } from './config.ts';
 import { GitHubPagesPublisher, parseRepo, type SitePublisher } from './publish/github-pages.ts';
-import { CloudflareMedia, type MediaGenerator } from './content/media.ts';
+import { buildMedia, CloudflareMedia, GeminiVoice, type MediaGenerator } from './content/media.ts';
 import { MemoryContentStore, type ContentStore } from './content/store.ts';
 import { createLogger } from './logger.ts';
 
@@ -172,8 +172,10 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
   } else {
     contentStore = new MemoryContentStore();
   }
-  const media = config.cloudflareAccountId !== undefined && config.cloudflareApiToken !== undefined ? new CloudflareMedia(config.cloudflareAccountId, config.cloudflareApiToken) : undefined;
-  if (media === undefined && (config.cloudflareAccountId !== undefined || config.cloudflareApiToken !== undefined)) {
+  const cloudflare = config.cloudflareAccountId !== undefined && config.cloudflareApiToken !== undefined ? new CloudflareMedia(config.cloudflareAccountId, config.cloudflareApiToken) : undefined;
+  const gemini = config.geminiApiKey !== undefined ? new GeminiVoice(config.geminiApiKey, config.geminiTtsModel) : undefined;
+  const media = buildMedia({ cloudflare, gemini });
+  if (cloudflare === undefined && (config.cloudflareAccountId !== undefined || config.cloudflareApiToken !== undefined)) {
     logger.warn('image and voice generation need both CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN: it is off');
   }
 

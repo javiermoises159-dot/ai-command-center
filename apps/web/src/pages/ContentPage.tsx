@@ -19,6 +19,7 @@ import {
   updateContent,
   type Bucket,
   type ContentItem,
+  type MediaStatus,
   type Platform,
   type VoiceLang,
 } from '../lib/content.ts';
@@ -47,7 +48,7 @@ function when(iso: string | null): string {
 export function ContentPage() {
   const [items, setItems] = useState<ContentItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [mediaOn, setMediaOn] = useState<boolean | null>(null);
+  const [media, setMedia] = useState<MediaStatus | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(async () => {
@@ -61,7 +62,7 @@ export function ContentPage() {
 
   useEffect(() => {
     void load();
-    mediaStatus().then((m) => setMediaOn(m.configured)).catch(() => setMediaOn(null));
+    mediaStatus().then(setMedia).catch(() => setMedia(null));
     const timer = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, [load]);
@@ -76,10 +77,10 @@ export function ContentPage() {
     <div>
       <PageHeader icon="calendar" title="Contenidos" description="Prepara publicaciones con texto, imagen y voz, dales fecha, y cuando toque las publicas con un toque desde el móvil." />
 
-      {mediaOn === false && (
+      {media !== null && !media.image && (
         <div className="mb-4">
-          <Notice title="Imágenes y voz sin activar">
-            Faltan CLOUDFLARE_ACCOUNT_ID y CLOUDFLARE_API_TOKEN en Render. El calendario funciona igual; solo no podrás generar imagen ni voz todavía.
+          <Notice title="Imágenes sin activar">
+            Faltan CLOUDFLARE_ACCOUNT_ID y CLOUDFLARE_API_TOKEN en Render. El calendario funciona igual; solo no podrás generar imágenes todavía.
           </Notice>
         </div>
       )}
@@ -108,7 +109,7 @@ export function ContentPage() {
             ) : (
               <div className="space-y-3">
                 {groups[key].map((item) => (
-                  <Piece key={item.id} item={item} mediaOn={mediaOn === true} onChange={replace} onDeleted={(id) => setItems((c) => (c ?? []).filter((i) => i.id !== id))} due={key === 'due'} />
+                  <Piece key={item.id} item={item} media={media} onChange={replace} onDeleted={(id) => setItems((c) => (c ?? []).filter((i) => i.id !== id))} due={key === 'due'} />
                 ))}
               </div>
             )}
@@ -164,12 +165,15 @@ function NewPiece({ onCreated }: { onCreated: (item: ContentItem) => void }) {
   );
 }
 
-function Piece({ item, mediaOn, due, onChange, onDeleted }: { item: ContentItem; mediaOn: boolean; due: boolean; onChange: (i: ContentItem) => void; onDeleted: (id: string) => void }) {
+function Piece({ item, media, due, onChange, onDeleted }: { item: ContentItem; media: MediaStatus | null; due: boolean; onChange: (i: ContentItem) => void; onDeleted: (id: string) => void }) {
   const [open, setOpen] = useState(due);
   const [caption, setCaption] = useState(item.caption);
   const [imagePrompt, setImagePrompt] = useState(item.imagePrompt);
   const [voiceText, setVoiceText] = useState(item.voiceText);
-  const [lang, setLang] = useState<VoiceLang>('es');
+  const langs = media?.voiceLangs ?? [];
+  const [chosenLang, setLang] = useState<VoiceLang | null>(null);
+  // Spanish first (the app's language), else whatever the configured voice offers.
+  const lang: VoiceLang | null = chosenLang !== null && langs.includes(chosenLang) ? chosenLang : langs.includes('es') ? 'es' : (langs[0] ?? null);
   const [when_, setWhen] = useState(isoToLocalInput(item.scheduledAt));
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -273,10 +277,11 @@ function Piece({ item, mediaOn, due, onChange, onDeleted }: { item: ContentItem;
 
           <div className="space-y-2 rounded-xl border border-[var(--color-line)] p-3">
             <Field label="Imagen: descríbela" id={`img-${item.id}`}>
-              <textarea id={`img-${item.id}`} rows={2} className={`${FIELD} py-2`} placeholder="Ej.: galletas con chips de chocolate sobre mesa de madera, luz cálida" value={imagePrompt} maxLength={1500} onChange={(e) => setImagePrompt(e.target.value)} />
+              <textarea id={`img-${item.id}`} rows={2} className={`${FIELD} py-2`} placeholder="Ej.: Close-up photo of chocolate chip cookies on a rustic wooden table, warm light" value={imagePrompt} maxLength={1500} onChange={(e) => setImagePrompt(e.target.value)} />
             </Field>
+            <p className="text-[0.75rem] text-[var(--color-ink-faint)]">Escríbela en inglés: el generador gratuito entiende mucho mejor el inglés que el español.</p>
             {imageUrl !== null && <img src={imageUrl} alt={item.title} className="max-h-80 w-full rounded-xl object-contain" />}
-            <Button variant="ghost" disabled={!mediaOn || imagePrompt.trim() === ''} busy={busy === 'image'} onClick={() => void run('image', () => generateImage(item.id, imagePrompt))}>
+            <Button variant="ghost" disabled={media?.image !== true || imagePrompt.trim() === ''} busy={busy === 'image'} onClick={() => void run('image', () => generateImage(item.id, imagePrompt))}>
               {item.hasImage ? 'Generar otra imagen' : 'Generar imagen'}
             </Button>
           </div>
@@ -286,13 +291,14 @@ function Piece({ item, mediaOn, due, onChange, onDeleted }: { item: ContentItem;
               <textarea id={`voice-${item.id}`} rows={3} className={`${FIELD} py-2`} value={voiceText} maxLength={1500} onChange={(e) => setVoiceText(e.target.value)} />
             </Field>
             <Field label="Idioma de la voz" id={`lang-${item.id}`}>
-              <select id={`lang-${item.id}`} className={FIELD} value={lang} onChange={(e) => setLang(e.target.value as VoiceLang)}>
-                {(Object.keys(VOICE_LANG_LABELS) as VoiceLang[]).map((l) => <option key={l} value={l}>{VOICE_LANG_LABELS[l]}</option>)}
+              <select id={`lang-${item.id}`} className={FIELD} value={lang ?? ''} disabled={langs.length === 0} onChange={(e) => setLang(e.target.value as VoiceLang)}>
+                {langs.map((l) => <option key={l} value={l}>{VOICE_LANG_LABELS[l]}</option>)}
               </select>
             </Field>
-            <p className="text-[0.75rem] text-[var(--color-ink-faint)]">El italiano todavía no está disponible en la voz gratuita.</p>
+            {langs.length === 0 && <p className="text-[0.75rem] text-[var(--color-ink-faint)]">La voz no está activada: falta GEMINI_API_KEY en Render.</p>}
+            {langs.length > 0 && !langs.includes('es') && <p className="text-[0.75rem] text-[var(--color-ink-faint)]">Con esta voz solo hay inglés y francés. Para español e italiano añade GEMINI_API_KEY en Render.</p>}
             {audioUrl !== null && <audio controls src={audioUrl} className="w-full" />}
-            <Button variant="ghost" disabled={!mediaOn || voiceText.trim() === ''} busy={busy === 'voice'} onClick={() => void run('voice', () => generateVoice(item.id, voiceText, lang))}>
+            <Button variant="ghost" disabled={lang === null || voiceText.trim() === ''} busy={busy === 'voice'} onClick={() => lang !== null && void run('voice', () => generateVoice(item.id, voiceText, lang))}>
               {item.hasAudio ? 'Generar otra voz' : 'Generar voz'}
             </Button>
           </div>

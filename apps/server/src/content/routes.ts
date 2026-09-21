@@ -3,7 +3,7 @@
 import { DomainError } from '@acc/domain';
 
 import { json, type Route } from '../http/types.ts';
-import { MediaError, VOICE_LANGS, type MediaGenerator, type VoiceLang } from './media.ts';
+import { ALL_VOICE_LANGS, MediaError, type MediaGenerator, type VoiceLang } from './media.ts';
 import { PLATFORMS, STATUSES, type ContentInput, type ContentPatch, type ContentStore, type MediaKind, type Platform, type ContentStatus } from './store.ts';
 
 export interface ContentDeps {
@@ -87,14 +87,15 @@ function mediaKind(value: string | undefined): MediaKind {
 }
 
 export function contentRoutes(deps: ContentDeps): Route[] {
-  const need = (): MediaGenerator => {
-    if (deps.media === undefined) {
-      throw new DomainError('conflict', 'Media generation is not configured.', {
-        status: 409,
-        publicMessage: 'Faltan CLOUDFLARE_ACCOUNT_ID y CLOUDFLARE_API_TOKEN en el servidor para generar imágenes y voz.',
-      });
-    }
-    return deps.media;
+  const missing = (what: string, vars: string) =>
+    new DomainError('conflict', `${what} is not configured.`, { status: 409, publicMessage: `Falta ${vars} en el servidor para generar ${what}.` });
+  const needImage = (): NonNullable<MediaGenerator['image']> => {
+    if (deps.media?.image == null) throw missing('imágenes', 'CLOUDFLARE_ACCOUNT_ID y CLOUDFLARE_API_TOKEN');
+    return deps.media.image;
+  };
+  const needVoice = (): NonNullable<MediaGenerator['voice']> => {
+    if (deps.media?.voice == null) throw missing('voz', 'GEMINI_API_KEY (o CLOUDFLARE_ACCOUNT_ID y CLOUDFLARE_API_TOKEN)');
+    return deps.media.voice;
   };
   const run = async <T>(work: () => Promise<T>): Promise<T> => {
     try {
@@ -110,7 +111,7 @@ export function contentRoutes(deps: ContentDeps): Route[] {
     {
       method: 'GET',
       pattern: '/api/content/status',
-      handler: async () => json(200, { media: { configured: deps.media !== undefined, voiceLangs: VOICE_LANGS } }),
+      handler: async () => json(200, { media: { image: deps.media?.image != null, voiceLangs: deps.media?.voice?.langs ?? [] } }),
     },
     { method: 'GET', pattern: '/api/content', handler: async () => json(200, { items: await deps.store.list() }) },
     { method: 'POST', pattern: '/api/content', handler: async (request) => json(201, { item: await deps.store.create(parseCreate(request.body)) }) },
@@ -144,13 +145,13 @@ export function contentRoutes(deps: ContentDeps): Route[] {
       method: 'POST',
       pattern: '/api/content/:id/image',
       handler: async (request, params) => {
-        const generator = need();
+        const generate = needImage();
         const id = param(params, 'id');
         const item = await deps.store.get(id);
         if (item === null) throw notFound();
         const prompt = text((request.body as { prompt?: unknown } | undefined)?.prompt, 'la descripción de la imagen', 1500) ?? item.imagePrompt;
         if (prompt === '') throw invalid('Escribe primero qué imagen quieres.');
-        const media = await run(() => generator.image(prompt));
+        const media = await run(() => generate(prompt));
         await deps.store.update(id, { imagePrompt: prompt });
         return json(200, { item: await deps.store.setMedia(id, 'image', media) });
       },
@@ -159,15 +160,16 @@ export function contentRoutes(deps: ContentDeps): Route[] {
       method: 'POST',
       pattern: '/api/content/:id/voice',
       handler: async (request, params) => {
-        const generator = need();
+        const voice = needVoice();
         const id = param(params, 'id');
         const item = await deps.store.get(id);
         if (item === null) throw notFound();
         const body = (request.body ?? {}) as { text?: unknown; lang?: unknown };
         const voiceText = text(body.text, 'el texto de la voz', 1500) ?? item.voiceText;
         if (voiceText === '') throw invalid('Escribe primero qué debe decir la voz.');
-        const lang: VoiceLang = oneOf<VoiceLang>(body.lang, VOICE_LANGS, 'El idioma') ?? 'es';
-        const media = await run(() => generator.voice(voiceText, lang));
+        const lang: VoiceLang = oneOf<VoiceLang>(body.lang, ALL_VOICE_LANGS, 'El idioma') ?? 'es';
+        if (!voice.langs.includes(lang)) throw invalid('Ese idioma no está disponible con la voz configurada.');
+        const media = await run(() => voice.speak(voiceText, lang));
         await deps.store.update(id, { voiceText });
         return json(200, { item: await deps.store.setMedia(id, 'audio', media) });
       },

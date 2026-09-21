@@ -5,7 +5,7 @@
 
 export type Platform = 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'telegram' | 'other';
 export type ContentStatus = 'draft' | 'scheduled' | 'published';
-export type VoiceLang = 'es' | 'en' | 'fr' | 'zh' | 'ja' | 'ko';
+export type VoiceLang = 'es' | 'it' | 'en' | 'fr' | 'de' | 'pt';
 
 export const PLATFORM_LABELS: Record<Platform, string> = {
   instagram: 'Instagram',
@@ -18,11 +18,11 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
 
 export const VOICE_LANG_LABELS: Record<VoiceLang, string> = {
   es: 'Español',
+  it: 'Italiano',
   en: 'Inglés',
   fr: 'Francés',
-  zh: 'Chino',
-  ja: 'Japonés',
-  ko: 'Coreano',
+  de: 'Alemán',
+  pt: 'Portugués',
 };
 
 export interface ContentItem {
@@ -69,7 +69,11 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 export const listContent = async () => (await call<{ items: ContentItem[] }>('GET', '/api/content')).items;
-export const mediaStatus = async () => (await call<{ media: { configured: boolean } }>('GET', '/api/content/status')).media;
+export interface MediaStatus {
+  image: boolean;
+  voiceLangs: VoiceLang[];
+}
+export const mediaStatus = async () => (await call<{ media: MediaStatus }>('GET', '/api/content/status')).media;
 export const createContent = async (input: NewContent) => (await call<{ item: ContentItem }>('POST', '/api/content', input)).item;
 export const updateContent = async (id: string, patch: Partial<NewContent> & { status?: ContentStatus }) =>
   (await call<{ item: ContentItem }>('PATCH', `/api/content/${encodeURIComponent(id)}`, patch)).item;
@@ -117,7 +121,7 @@ export function base64ToBlob(base64: string, mime: string): Blob {
   return new Blob([bytes], { type: mime });
 }
 
-const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'audio/mpeg': 'mp3' };
+const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'audio/mpeg': 'mp3', 'audio/wav': 'wav' };
 
 /**
  * Hand a piece to the phone's share sheet (picture + text) so it can go to the

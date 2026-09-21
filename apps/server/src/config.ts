@@ -40,6 +40,9 @@ export interface ServerConfig {
   /** Cloudflare Workers AI, for pictures and voice-overs. Both are needed. */
   cloudflareAccountId: string | undefined;
   cloudflareApiToken: string | undefined;
+  /** Gemini text-to-speech for voice-overs (reuses the Gemini key). */
+  geminiApiKey: string | undefined;
+  geminiTtsModel: string | undefined;
   /** "owner/repository" where finished websites are published (GitHub Pages). */
   githubSitesRepo: string | undefined;
   enableWikipedia: boolean;
@@ -267,6 +270,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     githubToken: str(env, 'GITHUB_TOKEN'),
     cloudflareAccountId: str(env, 'CLOUDFLARE_ACCOUNT_ID'),
     cloudflareApiToken: str(env, 'CLOUDFLARE_API_TOKEN'),
+    geminiApiKey: str(env, 'GOOGLE_API_KEY') ?? str(env, 'GEMINI_API_KEY'),
+    geminiTtsModel: str(env, 'GEMINI_TTS_MODEL'),
     githubSitesRepo: str(env, 'GITHUB_SITES_REPO'),
     realProviders: realProviderOptionsFromEnv(env),
     disabledProviders: (str(env, 'MADRE_DISABLED_PROVIDERS') ?? '')

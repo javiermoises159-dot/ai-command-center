@@ -6,12 +6,15 @@ import type { MissionService } from '@acc/orchestrator';
 import { ProviderRegistry } from '@acc/providers';
 
 import { createRouter } from '../http/router.ts';
-import { CloudflareMedia, MediaError, type Fetch, type MediaGenerator } from './media.ts';
+import { buildMedia, CloudflareMedia, GeminiVoice, MediaError, pcmToWavBase64, type Fetch, type MediaGenerator } from './media.ts';
 import { MemoryContentStore } from './store.ts';
 
 const fakeMedia: MediaGenerator = {
   image: async (prompt) => ({ mime: 'image/jpeg', base64: Buffer.from(`img:${prompt}`).toString('base64') }),
-  voice: async (text, lang) => ({ mime: 'audio/mpeg', base64: Buffer.from(`voice:${lang}:${text}`).toString('base64') }),
+  voice: {
+    langs: ['es', 'it', 'en'],
+    speak: async (text, lang) => ({ mime: 'audio/wav', base64: Buffer.from(`voice:${lang}:${text}`).toString('base64') }),
+  },
 };
 
 function api(media: MediaGenerator | null = fakeMedia) {
@@ -90,12 +93,16 @@ describe('content calendar', () => {
     const { item } = (await call('POST', '/api/content', { title: 'X' })).body;
     assert.equal((await call('POST', `/api/content/${item.id}/image`, {})).status, 400);
     assert.equal((await call('POST', `/api/content/${item.id}/voice`, { lang: 'it' })).status, 400);
+    // A language the configured voice cannot speak is refused, not sent to the service.
+    await call('PATCH', `/api/content/${item.id}`, { voiceText: 'Ciao' });
+    assert.equal((await call('POST', `/api/content/${item.id}/voice`, { lang: 'fr' })).status, 400);
     const off = api(null);
     const made = (await off('POST', '/api/content', { title: 'X', imagePrompt: 'a' })).body.item;
     const res = await off('POST', `/api/content/${made.id}/image`, {});
     assert.equal(res.status, 409);
     assert.match(JSON.stringify(res.body), /CLOUDFLARE_API_TOKEN/);
-    assert.equal((await off('GET', '/api/content/status')).body.media.configured, false);
+    assert.deepEqual((await off('GET', '/api/content/status')).body.media, { image: false, voiceLangs: [] });
+    assert.deepEqual((await api()('GET', '/api/content/status')).body.media, { image: true, voiceLangs: ['es', 'it', 'en'] });
   });
 
   it('shows the media provider\'s own message when it fails', async () => {
@@ -122,7 +129,8 @@ describe('CloudflareMedia', () => {
     assert.match(seen?.url ?? '', /accounts\/acct\/ai\/run\/@cf\/black-forest-labs\/flux-1-schnell$/);
     assert.equal(seen?.headers.authorization, 'Bearer secret-token');
     assert.equal(seen?.body.includes('secret-token'), false);
-    assert.deepEqual(await media.voice('hola', 'es'), { mime: 'audio/mpeg', base64: 'SUQz' });
+    assert.deepEqual(await media.voice('hello', 'en'), { mime: 'audio/mpeg', base64: 'SUQz' });
+    assert.match(seen?.body ?? '', /"lang":"en"/);
   });
 
   it('turns auth, quota and unknown failures into actionable messages', async () => {
@@ -130,5 +138,73 @@ describe('CloudflareMedia', () => {
     await assert.rejects(new CloudflareMedia('a', 't', reply(429, {})).image('x'), /cupo gratuito/);
     await assert.rejects(new CloudflareMedia('a', 't', reply(400, { errors: [{ message: 'bad prompt' }] })).image('x'), /bad prompt/);
     await assert.rejects(new CloudflareMedia('a', 't', reply(200, { result: {} })).image('x'), /ninguna imagen/);
+  });
+});
+
+describe('Cloudflare voice languages', () => {
+  it('refuses Spanish and Italian up front: the service answers "Invalid input" to them', async () => {
+    let called = false;
+    const media = new CloudflareMedia('a', 't', async () => { called = true; return { ok: true, status: 200, text: async () => '{}' }; });
+    await assert.rejects(media.voice('hola', 'es'), /GEMINI_API_KEY/);
+    assert.equal(called, false);
+  });
+});
+
+describe('Gemini voice', () => {
+  const pcm = Buffer.from([1, 0, 2, 0, 3, 0]).toString('base64');
+  const ok = (seen: { url?: string; headers?: Record<string, string>; body?: string }): Fetch => async (url, init) => {
+    Object.assign(seen, { url, headers: init.headers, body: init.body });
+    return { ok: true, status: 200, text: async () => JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/L16;rate=24000', data: pcm } }] } }] }) };
+  };
+
+  it('asks for audio, sends the key in a header (not the URL) and returns a playable WAV', async () => {
+    const seen: { url?: string; headers?: Record<string, string>; body?: string } = {};
+    const out = await new GeminiVoice('secret-key', undefined, ok(seen)).speak('Ciao, benvenuti', 'it');
+    assert.equal(out.mime, 'audio/wav');
+    assert.equal(seen.url?.includes('secret-key'), false);
+    assert.equal(seen.headers?.['x-goog-api-key'], 'secret-key');
+    assert.match(seen.url ?? '', /models\/gemini-2\.5-flash-preview-tts:generateContent$/);
+    assert.match(seen.body ?? '', /"responseModalities":\["AUDIO"\]/);
+    const wav = Buffer.from(out.base64, 'base64');
+    assert.equal(wav.subarray(0, 4).toString(), 'RIFF');
+    assert.equal(wav.subarray(8, 12).toString(), 'WAVE');
+    assert.equal(wav.length, 44 + 6);
+    assert.equal(wav.readUInt32LE(24), 24000);
+  });
+
+  it('builds a correct WAV header', () => {
+    const wav = Buffer.from(pcmToWavBase64(pcm), 'base64');
+    assert.equal(wav.readUInt32LE(4), 36 + 6);
+    assert.equal(wav.readUInt32LE(40), 6);
+    assert.equal(wav.readUInt16LE(34), 16);
+  });
+
+  const reply = (status: number, body: unknown): Fetch => async () => ({ ok: status < 300, status, text: async () => JSON.stringify(body) });
+
+  it('explains quota, unknown-model, rejected-request and empty answers', async () => {
+    const speak = (f: Fetch) => new GeminiVoice('k', 'm', f).speak('x', 'es');
+    await assert.rejects(speak(reply(429, {})), /cupo gratuito de voz/);
+    await assert.rejects(speak(reply(404, {})), /GEMINI_TTS_MODEL/);
+    await assert.rejects(speak(reply(400, { error: { message: 'API key not valid' } })), /API key not valid/);
+    await assert.rejects(speak(reply(200, { candidates: [] })), /ningún audio/);
+  });
+});
+
+describe('buildMedia', () => {
+  it('uses Gemini for voice when it has a key, Cloudflare only for pictures', () => {
+    const cf = new CloudflareMedia('a', 't');
+    const media = buildMedia({ cloudflare: cf, gemini: new GeminiVoice('k') });
+    assert.ok(media?.image);
+    assert.deepEqual(media?.voice?.langs, ['es', 'it', 'en', 'fr', 'de', 'pt']);
+  });
+  it('falls back to Cloudflare voice (English and French only) without a Gemini key', () => {
+    const media = buildMedia({ cloudflare: new CloudflareMedia('a', 't') });
+    assert.deepEqual(media?.voice?.langs, ['en', 'fr']);
+  });
+  it('gives voice without pictures when only Gemini is configured, and nothing when neither is', () => {
+    const onlyGemini = buildMedia({ gemini: new GeminiVoice('k') });
+    assert.equal(onlyGemini?.image, null);
+    assert.ok(onlyGemini?.voice);
+    assert.equal(buildMedia({}), undefined);
   });
 });

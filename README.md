@@ -342,7 +342,7 @@ list: `.env.example` and [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 
 ## Content calendar (Contenidos)
 
-The **Contenidos** screen (More → Contenidos) holds posts prepared in advance: a title, the text, a date and time, and the platform. For each one you can generate a **picture** (Cloudflare Workers AI, FLUX schnell) and a **voice-over** (MeloTTS: Spanish, English, French, Chinese, Japanese, Korean — Italian is not available) — both use the free Cloudflare allowance and need `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (Workers AI permission) on the server. Without them the calendar still works.
+The **Contenidos** screen (More → Contenidos) holds posts prepared in advance: a title, the text, a date and time, and the platform. For each one you can generate a **picture** (Cloudflare Workers AI, FLUX schnell — describe it in English) and a **voice-over**. Pictures need `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (a token with the *Workers AI* permission). The voice uses **Gemini text-to-speech** when a Gemini key is set (`GOOGLE_API_KEY` or `GEMINI_API_KEY`; model `GEMINI_TTS_MODEL`, default `gemini-2.5-flash-preview-tts`; Spanish, Italian, English, French, German, Portuguese) and otherwise Cloudflare MeloTTS, which on Workers AI only accepts English and French (it answers `Invalid input` to `es`). Both use free allowances. Without any of these keys the calendar still works.
 
 When a scheduled time arrives the piece moves to **Toca publicar**. **Publicar ahora** opens the phone's share sheet with the picture and the text, so it goes to the chosen app with one more tap; nothing is posted on the person's behalf. Then **Marcar como publicado**. Automatic posting to platform APIs is a later step.
 
