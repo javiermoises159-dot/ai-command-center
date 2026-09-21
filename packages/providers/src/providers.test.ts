@@ -130,6 +130,16 @@ describe('openai-compatible provider', () => {
     assert.equal(result.simulated, false);
   });
 
+  it('treats HTTP 413 (request too large for the plan) as a limit, so the engine can move to another provider', async () => {
+    const { fetch } = fakeFetch({ status: 413, body: { error: { message: 'Request too large for model, tokens per minute (TPM): Limit 8000' } } });
+    const p = new OpenAICompatibleProvider({ apiKey: 'k-test', models: ['m-1'], baseUrl: 'https://host.example/v1', fetch });
+    await assert.rejects(p.execute(task({ model: 'm-1' })), (error: unknown) => {
+      assert.ok(error instanceof ProviderError);
+      assert.equal(error.providerCode, 'PROVIDER_RATE_LIMITED');
+      return true;
+    });
+  });
+
   it('never silently falls back to the mock', () => {
     const registry = createProviderRegistry();
     assert.throws(() => registry.resolve('openai-compatible'), /./);

@@ -147,6 +147,16 @@ export function failureFromResponse(
       detail: `${ctx.label} limitó las solicitudes (HTTP 429). Se reintenta pasado un tiempo de espera.`,
     });
   }
+  // 413: the request is bigger than this plan allows per call (free tiers cap
+  // tokens per request). The same request will not fit later either, but another
+  // provider may take it — so it is treated like a limit hit, which sends the
+  // engine to the next provider instead of ending the step.
+  if (status === 413) {
+    return new ProviderError('PROVIDER_RATE_LIMITED', {
+      ...base,
+      detail: `${ctx.label} rechazó la petición por ser demasiado grande para el límite de su plan (HTTP 413). Se prueba con otro proveedor.`,
+    });
+  }
   if (status === 408 || status === 504) {
     return new ProviderError('PROVIDER_TIMEOUT', { ...base, detail: `${ctx.label} no respondió a tiempo (HTTP ${status}).` });
   }

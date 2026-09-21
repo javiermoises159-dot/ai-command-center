@@ -42,7 +42,7 @@ export const IMPLEMENTED_TOOLS: ReadonlySet<string> = new Set(['memory.recall', 
 const MEMORY_SCOPES: readonly MemoryScope[] = ['user', 'project', 'mission', 'session'];
 const MAX_RECALL = 20;
 const ENRICH_TOP = 2;
-const ENRICH_CHARS = 1_500;
+const ENRICH_CHARS = 1_000;
 const FETCH_CHARS = 6_000;
 
 export class LocalToolExecutor implements ToolExecutor {
