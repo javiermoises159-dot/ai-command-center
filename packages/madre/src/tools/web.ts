@@ -18,6 +18,9 @@ export const defaultWebFetch: WebFetch = (url, init) => globalThis.fetch(url, in
 const USER_AGENT = 'AICommandCenter/1.0 (research assistant; contact: owner of this deployment)';
 const MAX_EXTRACT_CHARS = 3_000;
 const MAX_SNIPPET_CHARS = 700;
+/** Company-database profile pages: they match any business name and answer nothing. */
+const EXCLUDED_DOMAINS = ['rocketreach.co', 'tracxn.com', 'zoominfo.com', 'cbinsights.com', 'yelp.com', 'dnb.com', 'opencorporates.com', 'craft.co'];
+const MIN_SCORE = 0.2;
 
 export class WebToolError extends Error {}
 
@@ -40,7 +43,7 @@ export interface WikipediaOutput {
   fetchedAt: string;
 }
 
-const STOP = new Set(['para', 'con', 'una', 'uno', 'unos', 'unas', 'los', 'las', 'del', 'que', 'por', 'como', 'quiero', 'montar', 'lanzar', 'crear', 'identificar', 'definir', 'afecta', 'quién', 'sobre', 'este', 'esta', 'the', 'and', 'for', 'with']);
+const STOP = new Set(['abrir', 'tengo', 'investiga', 'investigar', 'analiza', 'analizar', 'busca', 'buscar', 'necesito', 'hacer', 'empezar', 'también', 'habituales', 'requisitos', 'legales', 'competencia', 'precios', 'primeros', 'compradores', 'conseguir', 'página', 'pasos', 'ayuda', 'cómo', 'para', 'con', 'una', 'uno', 'unos', 'unas', 'los', 'las', 'del', 'que', 'por', 'como', 'quiero', 'montar', 'lanzar', 'crear', 'identificar', 'definir', 'afecta', 'quién', 'sobre', 'este', 'esta', 'the', 'and', 'for', 'with']);
 
 /** The few words worth searching for when a whole sentence finds nothing. */
 export function keywords(text: string, max = 5): string {
@@ -126,7 +129,7 @@ export async function tavilySearch(fetch: WebFetch, apiKey: string, query: strin
     response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ query: q, max_results: max, search_depth: 'basic', include_answer: false }),
+      body: JSON.stringify({ query: q, max_results: max + 3, search_depth: 'basic', include_answer: false, exclude_domains: EXCLUDED_DOMAINS }),
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error) {
@@ -138,7 +141,12 @@ export async function tavilySearch(fetch: WebFetch, apiKey: string, query: strin
   if (!response.ok) throw new WebToolError(`Tavily respondió con HTTP ${response.status}.`);
   const raw = record(await response.json())?.results;
   const results: SearchResult[] = [];
-  for (const item of Array.isArray(raw) ? raw : []) {
+  const items = (Array.isArray(raw) ? raw : []).filter((item, i) => {
+    // Drop weak matches, but never leave a search with nothing when it found something.
+    const score = record(item)?.score;
+    return i < 2 || typeof score !== 'number' || score >= MIN_SCORE;
+  });
+  for (const item of items) {
     const r = record(item);
     if (r === null || typeof r.url !== 'string' || !/^https?:\/\//i.test(r.url)) continue;
     results.push({

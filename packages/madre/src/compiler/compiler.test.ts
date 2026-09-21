@@ -202,6 +202,19 @@ describe('planner', () => {
     assert.equal(new Set(searches.map((t) => JSON.stringify(t.input))).size, searches.length);
   });
 
+  it('searches for the topic of the first sentence, not for the instructions after it, and reads a url written later', () => {
+    const plan = planner().plan('Quiero abrir una tienda online de cookies artesanales en Italia. Tengo 1.500 €. Investiga la competencia y los precios habituales. Lee también esta página: https://es.wikipedia.org/wiki/Galleta');
+    const research = plan.steps.find((s) => s.id === 's-research-market')!;
+    const queries = research.toolRequests.filter((t) => t.toolId === 'web.search').map((t) => String(t.input.query));
+    assert.ok(queries.length >= 2);
+    for (const q of queries) {
+      assert.match(q, /cookies/i);
+      assert.doesNotMatch(q, /investiga|tengo|1\.500/i);
+    }
+    const fetches = research.toolRequests.filter((t) => t.toolId === 'web.fetch');
+    assert.deepEqual(fetches.map((t) => t.input.url), ['https://es.wikipedia.org/wiki/Galleta']);
+  });
+
   it('requests tools only where the agent lists them, and never requires an unavailable one', () => {
     const plan = planner().plan('Quiero lanzar una tienda online de cookies en Italia.');
     const research = plan.steps.find((s) => s.id === 's-research-market')!;

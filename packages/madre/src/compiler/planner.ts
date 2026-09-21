@@ -235,7 +235,7 @@ export class RulesPlanner implements Planner {
       capability: task.capability,
       dependsOn: [],
       task: agentTask,
-      toolRequests: this.toolRequestsFor(id, agent, task.capability, fresh, searchQuery(compiled, task), warnings, urlsIn(compiled)),
+      toolRequests: this.toolRequestsFor(id, agent, task.capability, fresh, searchQuery(compiled, task), warnings, urlsIn(compiled), topicOf(compiled)),
       verification: compiled.verificationCriteria.filter((c) => c.appliesTo.includes('*')).map((c) => c.id),
       maxAttempts,
     };
@@ -321,6 +321,7 @@ export class RulesPlanner implements Planner {
     query: string,
     warnings: Set<string>,
     urls: readonly string[] = [],
+    topicText = '',
   ): ToolRequest[] {
     const requests: ToolRequest[] = [];
     const add = (toolId: string, purpose: string, required: boolean, input: Record<string, unknown> | null, suffix = ''): void => {
@@ -352,7 +353,7 @@ export class RulesPlanner implements Planner {
     if ((fresh || capability.startsWith('research.')) && agent.optionalTools.includes('web.search')) {
       // Several narrow searches find more than one long one: the topic on its
       // own, then the angles this kind of step needs (competitors, prices, rules).
-      const topic = keywords(query, 8) || query.slice(0, 120);
+      const topic = topicText || keywords(query, 6) || query.slice(0, 120);
       const angles = (SEARCH_ANGLES[capability] ?? []).map((angle) => `${angle} ${topic}`);
       // A mission about Italy is also searched in Italian: local businesses and
       // rules are mostly documented there, and Spanish keywords miss them.
@@ -405,12 +406,22 @@ export class RulesPlanner implements Planner {
 
 /** What a retrieval tool should look for on behalf of one task: the mission's subject plus the task's own title. */
 const MAX_SEARCHES_PER_STEP = 3;
+
+/**
+ * What the mission is about, as search words: the keywords of its FIRST sentence.
+ * Later sentences hold instructions ("investiga…", "tengo 1.500 €"), which make
+ * terrible search terms.
+ */
+function topicOf(compiled: CompiledMission): string {
+  const first = compiled.intent.rawText.replace(/https?:\/\/\S+/g, ' ').split(/(?<=[.!?])\s+/)[0] ?? '';
+  return keywords(first, 6);
+}
 const ITALY = /\b(italia|italy|italiano|italiana|tur[ií]n|torino|mil[aá]n|milano|roma|n[aá]poles|napoli|bolo[nñ]ia|bologna|florencia|firenze|venecia|venezia|g[eé]nova|genova)\b/i;
 
 /** Addresses the user wrote in the mission, which they clearly want read. */
 function urlsIn(compiled: CompiledMission): string[] {
-  const text = [compiled.objective.text, ...compiled.context.map((s) => s.text)].join(' ');
-  return [...new Set(text.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [])].map((u) => u.replace(/[.,;:!?]+$/, ''));
+  const text = [compiled.intent.rawText, compiled.objective.text, ...compiled.context.map((s) => s.text)].join(' ');
+  return [...new Set(text.match(/https?:\/\/[^\s<>"')\]»«“”]+/gi) ?? [])].map((u) => u.replace(/[.,;:!?]+$/, ''));
 }
 
 /** Extra angles to search for, by the kind of research the step does. */

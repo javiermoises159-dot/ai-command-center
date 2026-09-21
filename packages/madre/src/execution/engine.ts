@@ -691,8 +691,11 @@ export class MadreEngine {
         signal: ctx.controller.signal,
       });
       toolResults.push(result);
-      if (!result.ok && (request.toolId === 'web.search' || request.toolId === 'web.fetch')) caveats.push(LIVE_SOURCES_CAVEAT);
     }
+    // The caveat is for a step that got NO live source at all: one failed search
+    // among several that worked does not make the step unsourced.
+    const isWeb = (id: string): boolean => id === 'web.search' || id === 'web.fetch';
+    if (step.toolRequests.some((r) => isWeb(r.toolId)) && !toolResults.some((r) => r.ok && isWeb(r.toolId))) caveats.push(LIVE_SOURCES_CAVEAT);
     st.toolResults = toolResults;
     this.save(ctx);
     const searched = toolResults.some((r) => r.toolId === 'web.search' && r.ok);
