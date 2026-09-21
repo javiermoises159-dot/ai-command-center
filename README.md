@@ -332,13 +332,25 @@ only to this API.
 Provider variables (server only; never sent to the browser, database, trace or
 audit): `OPENAI_API_KEY`/`OPENAI_MODEL`, `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL`/
 `ANTHROPIC_MAX_TOKENS`, `GOOGLE_API_KEY` (alias `GEMINI_API_KEY`)/`GEMINI_MODEL`,
-the optional `*_API_BASE_URL` overrides, `MADRE_DISABLED_PROVIDERS` and
+`CEREBRAS_API_KEY`/`CEREBRAS_MODEL`, `MISTRAL_API_KEY`/`MISTRAL_MODEL`, `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`/`CLOUDFLARE_MODEL` (free-tier hosts, assumed 0 USD), `NEWS_ENABLED`, `GITHUB_TOKEN`/`GITHUB_SITES_REPO` (site publishing), the optional `*_API_BASE_URL` overrides, `MADRE_DISABLED_PROVIDERS` and
 `MADRE_PRICES_JSON` (prices per 1k tokens; a model without a price is refused
 under a budget, never priced at $0). A provider needs **both** a key and a model
 to count as configured — there is no built-in default model. Details and the full
 list: `.env.example` and [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 
 ---
+
+## Publishing websites (GitHub Pages, free)
+
+A mission that asks the crew to *build* a page or a simple ordering app (for example "créame una página web y una app de pedidos") gets an `engineering.site` step. The result is ONE self-contained HTML file: no external scripts, fonts or images, no network calls; orders are sent through a WhatsApp link (there is no server and no payment). The page is shown in a sandboxed preview on the mission screen and can be downloaded.
+
+To publish it with one tap:
+
+1. Create a **public** repository (for example `acc-sites`) with a README.
+2. Create a **fine-grained personal access token** limited to that repository only, with `Contents: Read and write` and `Pages: Read and write`.
+3. Set `GITHUB_TOKEN` and `GITHUB_SITES_REPO=owner/acc-sites` on the server (Render).
+
+The token stays on the server. Each site is written to `<repo>/<folder>/index.html` and served at `https://<owner>.github.io/<repo>/<folder>/`. Nothing is published unless a person taps *Publicar*, and the page is checked again on the server before it is sent (`checkSiteHtml` in `@acc/domain`).
 
 ## Adding an AI provider
 

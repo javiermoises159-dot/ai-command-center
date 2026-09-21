@@ -33,6 +33,8 @@ import {
   LOGO_REQUEST,
   LOGO_TASK,
   RESEARCH_QUESTIONS,
+  SITE_REQUEST,
+  SITE_TASK,
   TEMPLATES,
   type TaskTemplate,
 } from './templates.ts';
@@ -53,10 +55,19 @@ export function taskIdFor(capability: Capability): string {
 
 function pickTemplates(intent: MissionIntent, maxTasks: number): TaskTemplate[] {
   const wantsLogo = LOGO_REQUEST.test(intent.rawText);
+  const wantsSite = SITE_REQUEST.test(intent.rawText);
   // A mission that is just "make me a logo" gets the brand direction and the logo,
   // not the generic questions of a general mission.
-  if (wantsLogo && intent.kind === 'general') return [BRAND_TASK, LOGO_TASK];
+  if (wantsLogo && intent.kind === 'general') return wantsSite ? [BRAND_TASK, LOGO_TASK, SITE_TASK] : [BRAND_TASK, LOGO_TASK];
+  // The same for "build me a page": the brand direction, then the page itself.
+  if (wantsSite && intent.kind === 'general') return [BRAND_TASK, SITE_TASK];
   const chosen = pickBase(intent, maxTasks);
+  // Asked to build a page inside a bigger mission (a launch, a campaign): add it.
+  // It stays inside the cap: the page replaces the least essential trailing tasks.
+  if (wantsSite && !chosen.some((t) => t.capability === 'engineering.site')) {
+    while (chosen.length >= maxTasks && chosen.length > 1) chosen.pop();
+    chosen.push(SITE_TASK);
+  }
   // Asked for a logo inside a bigger mission: add it after the brand step.
   if (wantsLogo && !chosen.some((t) => t.capability === 'design.logo')) {
     if (!chosen.some((t) => t.capability === 'design.brand')) chosen.push(BRAND_TASK);

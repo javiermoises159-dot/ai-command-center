@@ -17,6 +17,7 @@ import { createProviderRegistry, discoverOllamaModels, type ProviderRegistry } f
 import { createRepositories } from '@acc/repositories';
 
 import type { ServerConfig } from './config.ts';
+import { GitHubPagesPublisher, parseRepo, type SitePublisher } from './publish/github-pages.ts';
 import { createLogger } from './logger.ts';
 
 export interface Container {
@@ -27,6 +28,8 @@ export interface Container {
   queue: JobQueue;
   missions: MissionService;
   madre: Madre;
+  /** Publishes finished websites to GitHub Pages; undefined without a token. */
+  sitePublisher: SitePublisher | undefined;
   shutdown(): Promise<void>;
 }
 
@@ -141,6 +144,19 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
   if (swept > 0) logger.warn('the safety-net sweep had to close runs the recovery pass left open', { count: swept });
   queue.start();
 
+  // Publishing needs both the token and the repository; one without the other is a
+  // misconfiguration worth saying, not a half-working feature.
+  let sitePublisher: SitePublisher | undefined;
+  if (config.githubToken !== undefined && config.githubSitesRepo !== undefined) {
+    if (parseRepo(config.githubSitesRepo) === null) logger.warn('GITHUB_SITES_REPO is not "owner/repository": site publishing is off');
+    else {
+      sitePublisher = new GitHubPagesPublisher(config.githubToken, config.githubSitesRepo);
+      logger.info('site publishing configured', { repo: sitePublisher.repo });
+    }
+  } else if (config.githubToken !== undefined || config.githubSitesRepo !== undefined) {
+    logger.warn('site publishing needs both GITHUB_TOKEN and GITHUB_SITES_REPO: it is off');
+  }
+
   const missions = new MissionService({ repositories, providers, queue, logger, defaultMode: config.defaultMissionMode });
 
   return {
@@ -151,6 +167,7 @@ export async function createContainer(config: ServerConfig): Promise<Container> 
     queue,
     missions,
     madre,
+    sitePublisher,
     async shutdown() {
       logger.info('draining job queue');
       await queue.stop(15_000);

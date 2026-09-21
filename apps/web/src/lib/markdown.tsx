@@ -274,6 +274,17 @@ export function Markdown({ source, className }: { source: string; className?: st
                 </figure>
               );
             }
+            // A whole page is long: keep it folded (the preview above is the way to see it).
+            if (block.language.toLowerCase() === 'html' && source.length > 1_500) {
+              return (
+                <details key={key} className="rounded-lg border border-[var(--color-edge)]">
+                  <summary className="cursor-pointer px-3 py-2 text-[0.8rem] font-semibold">Ver el código de la página ({Math.round(source.length / 1000)} KB)</summary>
+                  <pre className="overflow-x-auto border-t border-[var(--color-edge)] bg-[var(--color-tint)] p-3 font-mono text-[0.75rem] leading-relaxed text-[var(--color-ink)]">
+                    <code>{source}</code>
+                  </pre>
+                </details>
+              );
+            }
             return (
               <pre
                 key={key}

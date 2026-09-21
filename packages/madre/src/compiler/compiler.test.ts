@@ -293,3 +293,16 @@ describe('logo requests', () => {
     assert.ok(!plan.steps.some((s) => s.capability === 'design.logo'));
   });
 });
+
+describe('website requests', () => {
+  const caps = (text: string) => planner().plan(text).steps.filter((s) => s.kind === 'agent').map((s) => s.capability);
+  it('asks for a page when the user asks to build one', () => {
+    assert.ok(caps('Créame una página web y una app de pedidos para mi pastelería').includes('engineering.site'));
+    assert.ok(caps('Hazme una web para vender cookies artesanales en Turín').includes('engineering.site'));
+    assert.ok(caps('Quiero abrir una tienda online de cookies en Italia. Créame también una landing.').includes('engineering.site'));
+  });
+  it('does not build one when the user only researches or asks about it', () => {
+    assert.ok(!caps('Investiga cómo hacer una página web para una pastelería').includes('engineering.site'));
+    assert.ok(!caps('Quiero abrir una tienda online de cookies en Italia.').includes('engineering.site'));
+  });
+});

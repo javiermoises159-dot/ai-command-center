@@ -32,6 +32,7 @@ export const CAPABILITIES = {
   // Engineering
   'engineering.architecture': 'Elegir la forma técnica de la construcción.',
   'engineering.build_plan': 'Secuenciar la construcción en fases.',
+  'engineering.site': 'Construir una página web de un solo archivo (HTML, CSS y JS), lista para publicar.',
   // Design
   'design.ux': 'Definir el recorrido del usuario y los principios de interfaz.',
   'design.brand': 'Fijar la identidad visual y el tono.',

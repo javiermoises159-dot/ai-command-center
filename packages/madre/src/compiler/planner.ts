@@ -61,6 +61,7 @@ const DIFFICULTY: Partial<Record<Capability, 1 | 2 | 3 | 4 | 5>> = {
   'marketing.messaging': 2,
   'engineering.architecture': 4,
   'engineering.build_plan': 3,
+  'engineering.site': 4,
   'design.ux': 3,
   'design.brand': 2,
   'design.logo': 3,

@@ -50,3 +50,32 @@ describe('logos section', () => {
     assert.equal(withLogos(null, [text]), null);
   });
 });
+
+import { abbreviateSites, withSite } from './sources.ts';
+
+describe('website section', () => {
+  const html = `<!doctype html>\n<html lang="it"><head><meta charset="utf-8"><title>Biscotti</title></head><body>${'<p>x</p>'.repeat(300)}</body></html>`;
+  const step = `Hace pedidos por WhatsApp.\n\n\`\`\`html\n${html}\n\`\`\`\n\nNo tiene servidor.`;
+
+  it('attaches the page as delivered', () => {
+    const out = withSite('# Informe', [step])!;
+    assert.match(out, /## Página web/);
+    assert.ok(out.includes(html));
+    assert.equal(withSite('# Informe', ['sin página']), '# Informe');
+    assert.equal(withSite(null, [step]), null);
+  });
+
+  it('does not attach a page that fails the safety check, and says why', () => {
+    const bad = html.replace('<body>', '<body><script src="https://x.example/a.js"></script>');
+    const out = withSite('# Informe', [`\`\`\`html\n${bad}\n\`\`\``])!;
+    assert.match(out, /no se puede publicar/);
+    assert.doesNotMatch(out, /x\.example/);
+  });
+
+  it('shortens a big page for the steps that only need to know it exists', () => {
+    const short = abbreviateSites(step);
+    assert.ok(short.length < 400);
+    assert.match(short, /se adjunta tal cual/);
+    assert.equal(abbreviateSites('```html\n<b>hola</b>\n```'), '```html\n<b>hola</b>\n```');
+  });
+});

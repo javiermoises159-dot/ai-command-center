@@ -6,6 +6,8 @@
  * was consulted; it does not claim the report uses every one of them.
  */
 
+import { checkSiteHtml, extractSiteHtml } from '@acc/domain';
+
 import type { StepState } from '../types.ts';
 
 const MAX_SOURCES = 15;
@@ -85,4 +87,37 @@ export function withLogos(text: string | null, logoTexts: readonly string[]): st
   if (blocks.length === 0) return text;
   const body = blocks.map((svg, i) => `### Opción ${i + 1}\n\n\`\`\`svg\n${svg}\n\`\`\``).join('\n\n');
   return `${text.trimEnd()}\n\n## Logotipos\n\nDibujos generados por el equipo de diseño, tal como los entregó:\n\n${body}\n`;
+}
+
+// ---------------------------------------------------------------------------
+// Websites: the page the engineering step built, copied into the report as it
+// is. A summarising step never sees the whole page (see `abbreviateSites`) and
+// so cannot cut it short; the program attaches the original.
+// ---------------------------------------------------------------------------
+
+/** The report with the finished page appended, or unchanged when there is none. */
+export function withSite(text: string | null, siteTexts: readonly string[]): string | null {
+  if (text === null) return null;
+  for (const source of siteTexts) {
+    const html = extractSiteHtml(source);
+    if (html === null) continue;
+    const problems = checkSiteHtml(html);
+    if (problems.length > 0) {
+      return `${text.trimEnd()}\n\n## Página web\n\nEl equipo entregó una página, pero no se puede publicar tal cual porque ${problems.join('; ')}. Pide una nueva versión de la misión para corregirlo.\n`;
+    }
+    return `${text.trimEnd()}\n\n## Página web\n\nPágina completa generada por el equipo, tal como la entregó. Se puede ver y publicar desde esta pantalla.\n\n\`\`\`html\n${html}\n\`\`\`\n`;
+  }
+  return text;
+}
+
+/**
+ * Replace a big ```html page inside a step's text with a one-line note, for the
+ * steps that only need to know it exists. A whole page in the prompt of the
+ * integrator or the reviewer costs thousands of tokens and, on a free plan
+ * with a per-request limit, can make the call fail.
+ */
+export function abbreviateSites(text: string): string {
+  return text.replace(/```html[^\S\n]*\n([\s\S]*?)\n```/gi, (block, html: string) =>
+    html.length > 1_500 ? `[La página web completa (${html.length} caracteres de HTML) se adjunta tal cual al informe final; no se repite aquí.]` : block,
+  );
 }

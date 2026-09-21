@@ -393,6 +393,27 @@ export { ONLINE };
 /** A mission that asks for a logo or a visual identity. */
 export const LOGO_REQUEST = /\b(?:logo(?:tipo)?s?|isotipo|imagotipo|identidad visual|brand identity|logotype|marchio)\b/iu;
 
+/**
+ * A mission that asks the crew to BUILD a page or a simple ordering app:
+ * a creation verb near the thing built. "Investiga cómo hacer una web" does not match.
+ */
+export const SITE_REQUEST =
+  /\b(?:cr[eé]a(?:me|d)?|cre(?:es|e|en)|haz(?:me)?|hagas|constru[yí]e(?:me)?|construyas|genera(?:me)?|generes|desarrolla(?:me)?|desarrolles|monta(?:me)?|programa(?:me)?|dise[ñn]a(?:me)?|dise[ñn]es|prepara(?:me)?|build|make|create|develop|crea|fammi|costruisci)\b[^.\n]{0,50}\b(?:p[aá]gina(?:\s+web)?|sitio(?:\s+web)?|web|landing|app|aplicaci[oó]n|website|web\s*app|men[uú]\s+digital|sito|pagina)\b/iu;
+
+export const SITE_TASK: TaskTemplate = {
+  capability: 'engineering.site',
+  title: 'Construir la página web',
+  description:
+    'Construye la página o la app que pide el usuario como UN ÚNICO archivo HTML completo, en un solo bloque de código ```html que empiece por <!doctype html> y acabe en </html>. ' +
+    'Reglas obligatorias: HTML, CSS y JavaScript dentro del mismo archivo; sin scripts, fuentes, imágenes ni hojas de estilo externas (usa fuentes del sistema y dibujos SVG o emojis); ' +
+    'sin fetch, XMLHttpRequest, WebSocket, eval ni cookies; diseño pensado primero para móvil, con <meta name="viewport">, textos legibles y botones grandes; idioma de la página: el del público (italiano si es para Italia); ' +
+    'con título <title> y una descripción. Si es una app de pedidos: una lista de productos con nombre, descripción corta y precio que el usuario pueda cambiar fácilmente en un array al principio del script; ' +
+    'un carrito con + y −, el total, y campos de nombre, teléfono y notas; y un botón que abre WhatsApp con el pedido ya escrito (enlace https://wa.me/NUMERO?text=… con encodeURIComponent) y otro que copia el pedido. ' +
+    'Pon el número de WhatsApp en una constante llamada WHATSAPP_NUMBER al principio del script; si el usuario no lo dio, déjala vacía y haz que el botón avise de que falta configurarla. ' +
+    'Antes del bloque escribe dos líneas: qué hace la página y qué debe cambiar el usuario (nombre, precios, número de WhatsApp). Después del bloque, di con claridad qué NO hace (no hay servidor, ni pagos, ni base de datos: los pedidos llegan por WhatsApp).',
+  after: ['design.brand'],
+};
+
 export const BRAND_TASK: TaskTemplate = {
   capability: 'design.brand',
   title: 'Definir la marca',

@@ -27,6 +27,7 @@ export function createExpressApp(container: Container): Express {
     missions: container.missions,
     providers: container.providers,
     madre: container.madre.service,
+    sitePublisher: container.sitePublisher,
     logger: container.logger,
     version: container.config.version,
   });

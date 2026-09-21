@@ -43,6 +43,26 @@ services:
         sync: false
       - key: OPENAI_COMPAT_MODEL
         sync: false
+      # More free-tier AI hosts (each is its own provider; key AND model are needed).
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: CEREBRAS_MODEL
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: MISTRAL_MODEL
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_MODEL
+        sync: false
+      # Publish finished websites to GitHub Pages (token limited to one repository).
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_SITES_REPO
+        sync: false
       # Free web search (Tavily). Wikipedia is on by default and needs no key.
       - key: TAVILY_API_KEY
         sync: false

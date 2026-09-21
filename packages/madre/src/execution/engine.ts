@@ -71,7 +71,7 @@ import { AUDITED_EXCLUSIONS, PROVIDER_EVENTS, blockedErrorInfo, explanationData,
 import type { FailedUpstream, StepRunInput, StepRunner, UpstreamText } from './runner.ts';
 import { deriveBlockers, deriveConfidence, deriveNextAction, latestVerdict } from './summary.ts';
 import { emptyCostSummary } from '../cost/controller.ts';
-import { withLogos, withSources } from './sources.ts';
+import { abbreviateSites, withLogos, withSite, withSources } from './sources.ts';
 
 export interface EngineOptions {
   /** Steps that may run at once. 1 = strictly sequential. */
@@ -1053,7 +1053,9 @@ export class MadreEngine {
       if (depStep === undefined) continue;
       const agentName = depStep.kind === 'input' ? 'Usuario' : (this.d.agents.get(depStep.agentId)?.name ?? depStep.agentId);
       if (depState.status === 'DONE' && depState.result !== null) {
-        upstream.push({ stepId: depStep.id, title: depStep.title, agentName, text: depState.result.text });
+        // The integrator and the reviewer only need to know a page exists.
+        const text = step.kind === 'integrate' || step.kind === 'qa' ? abbreviateSites(depState.result.text) : depState.result.text;
+        upstream.push({ stepId: depStep.id, title: depStep.title, agentName, text });
       } else if (depState.status === 'FAILED' || depState.status === 'BLOCKED' || depState.status === 'CANCELLED') {
         failed.push({ stepId: depStep.id, title: depStep.title, agentName, error: depState.error ?? depState.blockedReason ?? depState.status.toLowerCase() });
       }
@@ -1193,7 +1195,7 @@ export class MadreEngine {
 
     const integrate = ctx.plan.steps.find((s) => s.kind === 'integrate');
     const integrateState = integrate !== undefined ? this.stateOf(ctx, integrate.id) : null;
-    const finalResult = withSources(withLogos(integrateState?.status === 'DONE' ? (integrateState.result?.text ?? null) : null, logoTexts(ctx)), ctx.state.steps);
+    const finalResult = withSources(withSite(withLogos(integrateState?.status === 'DONE' ? (integrateState.result?.text ?? null) : null, logoTexts(ctx)), siteTexts(ctx)), ctx.state.steps);
     const failedSteps = ctx.state.steps.filter((s) => s.status === 'FAILED');
     const verdict = latestVerdict(ctx.state.qaRounds);
     const success = finalResult !== null && failedSteps.length === 0 && verdict !== 'BLOCKED';
@@ -1309,9 +1311,15 @@ function terminalOutcome(ctx: RunContext): EngineOutcome | null {
     runId: ctx.runId,
     status: phase,
     phase,
-    finalResult: withSources(withLogos(st?.status === 'DONE' ? (st.result?.text ?? null) : null, logoTexts(ctx)), ctx.state.steps),
+    finalResult: withSources(withSite(withLogos(st?.status === 'DONE' ? (st.result?.text ?? null) : null, logoTexts(ctx)), siteTexts(ctx)), ctx.state.steps),
     verdict: latestVerdict(ctx.state.qaRounds),
   };
+}
+
+/** The text of every finished page-building step: where the website comes from. */
+function siteTexts(ctx: RunContext): string[] {
+  const siteSteps = new Set(ctx.plan.steps.filter((s) => s.capability === 'engineering.site').map((s) => s.id));
+  return ctx.state.steps.filter((s) => siteSteps.has(s.stepId) && s.status === 'DONE' && s.result?.text != null).map((s) => s.result!.text);
 }
 
 /** The text of every finished logo-design step: where the drawings come from. */

@@ -7,6 +7,9 @@
 
 import {
   DomainError,
+  extractSiteHtml,
+  siteSlug,
+  siteTitle,
   parseCreateMissionInput,
   parseListMissionsQuery,
   parseRunMissionInput,
@@ -18,6 +21,7 @@ import type { MissionService } from '@acc/orchestrator';
 import type { ProviderRegistry } from '@acc/providers';
 
 import { madreRoutes } from './madre-routes.ts';
+import { PublishError, type SitePublisher } from '../publish/github-pages.ts';
 import { json, matchPath, type HttpRequest, type HttpResponse, type Route } from './types.ts';
 import {
   serializeAgentCatalog,
@@ -34,6 +38,8 @@ export interface RouterDeps {
   logger: Logger;
   /** The MADRE core. When absent, the /api/madre routes are not registered. */
   madre?: MadreService | undefined;
+  /** Publishes finished websites. Absent when no GitHub token is configured. */
+  sitePublisher?: SitePublisher | undefined;
   /** Reported by /api/health so a deploy can be identified. */
   version: string;
 }
@@ -129,6 +135,49 @@ export function createRouter(deps: RouterDeps): Router {
         const input = parseRunMissionInput(request.body);
         const run = await deps.missions.run(requireParam(params, 'id'), input);
         return json(202, { run: serializeRun(run) });
+      },
+    },
+
+    {
+      method: 'GET',
+      pattern: '/api/site/status',
+      handler: async () => json(200, { publishing: { configured: deps.sitePublisher !== undefined, repo: deps.sitePublisher?.repo ?? null } }),
+    },
+
+    {
+      // Called by the "Publicar" button: the tap is the person's approval.
+      method: 'POST',
+      pattern: '/api/missions/:id/site/publish',
+      handler: async (_request, params) => {
+        const publisher = deps.sitePublisher;
+        if (publisher === undefined) {
+          throw new DomainError('conflict', 'Publishing is not configured.', {
+            status: 409,
+            publicMessage: 'La publicación no está configurada: faltan GITHUB_TOKEN y GITHUB_SITES_REPO en el servidor.',
+          });
+        }
+        const id = requireParam(params, 'id');
+        const detail = await deps.missions.get(id);
+        // The newest run that produced a page.
+        const runs = [...detail.runs].map((r) => r.run).sort((a, b) => b.attempt - a.attempt);
+        let html: string | null = null;
+        for (const run of runs) {
+          html = extractSiteHtml(run.finalResult);
+          if (html !== null) break;
+        }
+        if (html === null) {
+          throw new DomainError('not_found', 'No site in this mission.', { status: 404, publicMessage: 'Esta misión no tiene ninguna página web para publicar.' });
+        }
+        try {
+          const site = await publisher.publish({ slug: siteSlug(siteTitle(html) || detail.mission.title, id), html, message: `Publicar «${detail.mission.title.slice(0, 60)}»` });
+          log.info('site published', { missionId: id, path: site.path });
+          return json(200, { site });
+        } catch (error) {
+          if (error instanceof PublishError) {
+            throw new DomainError('conflict', error.message, { status: error.status >= 400 && error.status < 500 ? error.status : 502, publicMessage: error.message });
+          }
+          throw error;
+        }
       },
     },
 
